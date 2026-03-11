@@ -209,12 +209,19 @@ def get_loss_totals(user_id):
 
 
 def _init_db():
-    try:
-        with app.app_context():
-            db.create_all()
-        print("[startup] database tables ready", flush=True)
-    except Exception as e:
-        print(f"[startup] db.create_all() failed: {e}", flush=True)
+    import time
+    for attempt in range(5):
+        try:
+            with app.app_context():
+                db.create_all()
+            print(f"[startup] database tables ready (attempt {attempt + 1})", flush=True)
+            return
+        except Exception as e:
+            wait = 2 ** attempt
+            print(f"[startup] db attempt {attempt + 1}/5 failed: {e} — retrying in {wait}s", flush=True)
+            if attempt < 4:
+                time.sleep(wait)
+    print("[startup] db.create_all() failed after 5 attempts — app may error on first DB use", flush=True)
 
 
 threading.Thread(target=_init_db, daemon=True).start()
@@ -249,22 +256,41 @@ def auth_google():
 
 @app.route("/auth/callback")
 def auth_callback():
-    token = google.authorize_access_token(redirect_uri=_callback_url())
-    userinfo = token.get("userinfo")
-    if not userinfo:
-        return redirect(url_for("login"))
-    google_id = userinfo["sub"]
-    user = User.query.filter_by(google_id=google_id).first()
-    if not user:
-        user = User(google_id=google_id, name=userinfo.get("name"),
-                    email=userinfo.get("email"), picture=userinfo.get("picture"))
-        db.session.add(user)
-    else:
-        user.name = userinfo.get("name")
-        user.picture = userinfo.get("picture")
-    db.session.commit()
-    login_user(user)
-    return redirect(url_for("dashboard"))
+    import traceback
+    try:
+        cb_url = _callback_url()
+        print(f"[auth_callback] redirect_uri={cb_url}", flush=True)
+        token = google.authorize_access_token(redirect_uri=cb_url)
+        userinfo = token.get("userinfo")
+        if not userinfo:
+            print("[auth_callback] no userinfo in token", flush=True)
+            return redirect(url_for("login"))
+        google_id = userinfo["sub"]
+        user = User.query.filter_by(google_id=google_id).first()
+        if not user:
+            user = User(google_id=google_id, name=userinfo.get("name"),
+                        email=userinfo.get("email"), picture=userinfo.get("picture"))
+            db.session.add(user)
+        else:
+            user.name = userinfo.get("name")
+            user.picture = userinfo.get("picture")
+        db.session.commit()
+        login_user(user)
+        return redirect(url_for("dashboard"))
+    except Exception as exc:
+        tb = traceback.format_exc()
+        print(f"[auth_callback] ERROR: {exc}\n{tb}", flush=True)
+        # In production show a clean message; the full error is in Render logs.
+        # In dev mode show the traceback directly so it's easy to diagnose.
+        if IS_PRODUCTION:
+            return (
+                "<h2>Login error</h2>"
+                f"<p>Something went wrong during Google login. "
+                f"Check the Render logs for details.</p>"
+                f"<p><code>{exc}</code></p>"
+                f"<p><a href='/login'>Try again</a></p>"
+            ), 500
+        return f"<pre>{tb}</pre>", 500
 
 
 @app.route("/logout")
