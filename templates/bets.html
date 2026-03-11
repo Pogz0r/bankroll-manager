@@ -1,0 +1,405 @@
+{% extends "base.html" %}
+{% block title %}My Bets — BankrollPro{% endblock %}
+
+{% block content %}
+<div class="page">
+  <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-end">
+    <div>
+      <h1 class="page-title">MY <span class="accent">BETS</span></h1>
+      <p class="page-subtitle">Full bet log with filtering and editing</p>
+    </div>
+    <button class="btn btn-primary" onclick="openAddModal()">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" x2="12" y1="5" y2="19"/><line x1="5" x2="19" y1="12" y2="12"/></svg>
+      New Bet
+    </button>
+  </div>
+
+  <!-- Summary bar -->
+  <div class="grid-4" style="margin-bottom:20px">
+    <div class="stat-card" style="--accent-color:var(--green)">
+      <div class="stat-label">Total P&amp;L</div>
+      <div class="stat-value" id="summary-pl">$0.00</div>
+    </div>
+    <div class="stat-card" style="--accent-color:var(--blue)">
+      <div class="stat-label">Record</div>
+      <div class="stat-value" id="summary-record">0-0</div>
+    </div>
+    <div class="stat-card" style="--accent-color:var(--amber)">
+      <div class="stat-label">Pending</div>
+      <div class="stat-value amber" id="summary-pending">0</div>
+    </div>
+    <div class="stat-card" style="--accent-color:var(--purple)">
+      <div class="stat-label">Unit Size</div>
+      <div class="stat-value" id="summary-unit">$0.00</div>
+    </div>
+  </div>
+
+  <!-- Filters -->
+  <div class="card" style="margin-bottom:16px;padding:16px 20px">
+    <div class="filters-bar" style="margin-bottom:0">
+      <select class="filter-select" id="f-sport" onchange="loadBets()">
+        <option value="All">All Sports</option>
+        <option>NHL</option><option>NBA</option><option>NFL</option>
+        <option>MLB</option><option>UFC</option><option>Soccer</option>
+        <option>Tennis</option><option>Other</option>
+      </select>
+      <select class="filter-select" id="f-type" onchange="loadBets()">
+        <option value="All">All Types</option>
+        <option>Moneyline</option><option>Spread</option><option>Over/Under</option>
+        <option>Parlay</option><option>Prop</option><option>Other</option>
+      </select>
+      <select class="filter-select" id="f-result" onchange="loadBets()">
+        <option value="All">All Results</option>
+        <option>Pending</option><option>Win</option><option>Loss</option>
+        <option>Push</option><option>Void</option>
+      </select>
+      <input type="date" class="filter-select filter-date" id="f-from" onchange="loadBets()" placeholder="From">
+      <input type="date" class="filter-select filter-date" id="f-to" onchange="loadBets()" placeholder="To">
+      <button class="btn btn-ghost btn-sm" onclick="clearFilters()">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="m8 6-5 6h18l-5-6"/><path d="M5 12v7a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-7"/></svg>
+        Clear
+      </button>
+
+      <!-- Odds format toggle -->
+      <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+        <span style="font-size:11px;color:var(--text-3);letter-spacing:1px;text-transform:uppercase">Odds:</span>
+        <div class="odds-toggle" id="odds-display-toggle">
+          <button class="odds-toggle-btn active" onclick="setOddsDisplay('american',this)">AME</button>
+          <button class="odds-toggle-btn" onclick="setOddsDisplay('decimal',this)">DEC</button>
+          <button class="odds-toggle-btn" onclick="setOddsDisplay('fractional',this)">FRAC</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bets table -->
+  <div class="card" style="padding:0">
+    <div class="table-wrap">
+      <table id="bets-table">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Sport</th>
+            <th>Event</th>
+            <th>Type</th>
+            <th>Odds</th>
+            <th>Units</th>
+            <th>Stake</th>
+            <th>Result</th>
+            <th>P&amp;L</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="bets-tbody">
+          <tr><td colspan="10" style="text-align:center;padding:40px;color:var(--text-3)">Loading...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Add/Edit Bet Modal -->
+<div class="modal-overlay" id="bet-modal">
+  <div class="modal" style="max-width:580px">
+    <div class="modal-header">
+      <div class="modal-title" id="bet-modal-title">Add Bet</div>
+      <button class="modal-close" onclick="closeBetModal()">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></svg>
+      </button>
+    </div>
+    <form id="bet-form">
+      <input type="hidden" id="bet-id">
+      <div class="form-row cols-2" style="margin-bottom:14px">
+        <div class="form-group">
+          <label class="form-label">Sport</label>
+          <select class="form-select" name="sport" required>
+            <option value="">Select...</option>
+            <option>NHL</option><option>NBA</option><option>NFL</option>
+            <option>MLB</option><option>UFC</option><option>Soccer</option>
+            <option>Tennis</option><option>Other</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Bet Type</label>
+          <select class="form-select" name="bet_type" required>
+            <option value="">Select...</option>
+            <option>Moneyline</option><option>Spread</option><option>Over/Under</option>
+            <option>Parlay</option><option>Prop</option><option>Other</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:14px">
+        <label class="form-label">Event / Teams</label>
+        <input class="form-input" name="event" placeholder="e.g. Maple Leafs vs Bruins ML" required>
+      </div>
+      <div class="form-row cols-3" style="margin-bottom:14px">
+        <div class="form-group">
+          <label class="form-label">Odds Format</label>
+          <select class="form-select" name="odds_format" id="modal-odds-format" onchange="updateModalOddsPlaceholder()">
+            <option value="american">American</option>
+            <option value="decimal">Decimal</option>
+            <option value="fractional">Fractional</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Odds</label>
+          <input class="form-input" name="odds_value" id="modal-odds-input" placeholder="-110" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Date</label>
+          <input class="form-input" name="date_placed" type="date" id="modal-date">
+        </div>
+      </div>
+      <div class="form-row cols-3" style="margin-bottom:14px">
+        <div class="form-group">
+          <label class="form-label">Units (1–5)</label>
+          <select class="form-select" name="units" id="modal-units" onchange="calcModalStake()">
+            <option value="1">1 Unit</option><option value="2">2 Units</option>
+            <option value="3">3 Units</option><option value="4">4 Units</option>
+            <option value="5">5 Units</option><option value="0.5">0.5 Units</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Stake ($)</label>
+          <input class="form-input" name="stake" id="modal-stake" type="number" step="0.01" min="0.01" placeholder="0.00" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Result</label>
+          <select class="form-select" name="result">
+            <option value="Pending">Pending</option>
+            <option value="Win">Win</option>
+            <option value="Loss">Loss</option>
+            <option value="Push">Push</option>
+            <option value="Void">Void</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:18px">
+        <label class="form-label">Notes (optional)</label>
+        <textarea class="form-textarea" name="notes" placeholder="Any notes about this bet..."></textarea>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeBetModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="bet-submit-btn">Add Bet</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Settle result quick modal -->
+<div class="modal-overlay" id="settle-modal">
+  <div class="modal" style="max-width:360px">
+    <div class="modal-header">
+      <div class="modal-title">Settle Bet</div>
+      <button class="modal-close" onclick="document.getElementById('settle-modal').classList.remove('open')">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></svg>
+      </button>
+    </div>
+    <input type="hidden" id="settle-bet-id">
+    <p style="color:var(--text-2);margin-bottom:18px;font-size:13px" id="settle-event"></p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <button class="btn" style="background:var(--green-dim);color:var(--green);border:1px solid rgba(0,230,118,0.3);font-size:16px;padding:16px;flex-direction:column;gap:4px;height:auto" onclick="settleBet('Win')">
+        ✓ WIN
+      </button>
+      <button class="btn" style="background:var(--red-dim);color:var(--red);border:1px solid rgba(255,23,68,0.3);font-size:16px;padding:16px;flex-direction:column;gap:4px;height:auto" onclick="settleBet('Loss')">
+        ✗ LOSS
+      </button>
+      <button class="btn btn-secondary" style="padding:12px" onclick="settleBet('Push')">Push</button>
+      <button class="btn btn-secondary" style="padding:12px" onclick="settleBet('Void')">Void</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let oddsDisplay = 'american';
+let currentUnitSize = 0;
+let allBets = [];
+
+document.getElementById('modal-date').valueAsDate = new Date();
+
+function setOddsDisplay(fmt, btn) {
+  oddsDisplay = fmt;
+  document.querySelectorAll('#odds-display-toggle .odds-toggle-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderBetsTable(allBets);
+}
+
+function clearFilters() {
+  document.getElementById('f-sport').value = 'All';
+  document.getElementById('f-type').value = 'All';
+  document.getElementById('f-result').value = 'All';
+  document.getElementById('f-from').value = '';
+  document.getElementById('f-to').value = '';
+  loadBets();
+}
+
+async function loadBets() {
+  const params = new URLSearchParams({
+    sport:     document.getElementById('f-sport').value,
+    bet_type:  document.getElementById('f-type').value,
+    result:    document.getElementById('f-result').value,
+    date_from: document.getElementById('f-from').value,
+    date_to:   document.getElementById('f-to').value,
+  });
+  const res = await fetch('/api/bets?' + params);
+  const data = await res.json();
+  allBets = data.bets;
+  currentUnitSize = data.unit_size;
+
+  // Summary
+  const settled = data.bets.filter(b => b.result !== 'Pending');
+  const wins = settled.filter(b => b.result === 'Win').length;
+  const losses = settled.filter(b => b.result === 'Loss').length;
+  const pending = data.bets.filter(b => b.result === 'Pending').length;
+  const totalPl = settled.reduce((s,b) => s + b.profit_loss, 0);
+
+  const plEl = document.getElementById('summary-pl');
+  plEl.textContent = (totalPl >= 0 ? '+' : '') + fmt(totalPl);
+  plEl.className = 'stat-value ' + (totalPl > 0 ? 'green' : totalPl < 0 ? 'red' : '');
+  document.getElementById('summary-record').textContent = `${wins}W - ${losses}L`;
+  document.getElementById('summary-pending').textContent = pending;
+  document.getElementById('summary-unit').textContent = fmt(data.unit_size);
+
+  renderBetsTable(data.bets);
+}
+
+function renderBetsTable(bets) {
+  const tbody = document.getElementById('bets-tbody');
+  if (!bets.length) {
+    tbody.innerHTML = '<tr><td colspan="10"><div class="empty-state"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:36px;height:36px;margin:0 auto 10px;opacity:0.3;display:block"><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/></svg><div class="empty-state-title">No bets found</div><div class="empty-state-desc">Try adjusting your filters or add a new bet</div></div></td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = bets.map(b => {
+    const rowCls = b.result === 'Win' ? 'row-win' : b.result === 'Loss' ? 'row-loss' : b.result === 'Pending' ? 'row-pending' : '';
+    const oddsStr = oddsDisplay === 'american' ? fmtOdds(b.odds_american) :
+                    oddsDisplay === 'decimal'  ? b.odds_decimal.toFixed(2) :
+                    b.odds_fractional;
+    const pl = b.result === 'Pending' ? '—' : (b.profit_loss >= 0 ? '+' : '') + fmt(b.profit_loss);
+    const plCls = b.result === 'Pending' ? '' : b.profit_loss > 0 ? 'pl-positive' : b.profit_loss < 0 ? 'pl-negative' : '';
+    return `<tr class="${rowCls}">
+      <td style="color:var(--text-3);font-size:12px;white-space:nowrap">${fmtDate(b.date_placed)}</td>
+      <td><span class="sport-badge" style="color:${sportColor(b.sport)}">${b.sport}</span></td>
+      <td style="max-width:200px"><div style="font-size:13px;color:var(--text);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px" title="${b.event}">${b.event}</div>${b.notes ? `<div style="font-size:11px;color:var(--text-3);margin-top:1px">${b.notes}</div>` : ''}</td>
+      <td style="font-size:12px;color:var(--text-2)">${b.bet_type}</td>
+      <td class="mono">${oddsStr}</td>
+      <td class="mono">${b.units}u</td>
+      <td class="mono">${fmt(b.stake)}</td>
+      <td><span class="result-badge ${b.result}">${b.result}</span></td>
+      <td class="${plCls}">${pl}</td>
+      <td style="white-space:nowrap">
+        ${b.result === 'Pending' ? `<button class="btn btn-sm" style="background:var(--amber-dim);color:var(--amber);border:none;margin-right:4px" onclick="openSettleModal(${b.id},'${b.event.replace(/'/g,"\\'")}')">Settle</button>` : ''}
+        <button class="btn btn-ghost btn-sm btn-icon" onclick="openEditModal(${b.id})" title="Edit">
+          <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </button>
+        <button class="btn btn-danger btn-sm btn-icon" onclick="deleteBet(${b.id})" title="Delete">
+          <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+        </button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function openAddModal() {
+  document.getElementById('bet-id').value = '';
+  document.getElementById('bet-modal-title').textContent = 'Add Bet';
+  document.getElementById('bet-submit-btn').textContent = 'Add Bet';
+  document.getElementById('bet-form').reset();
+  document.getElementById('modal-date').valueAsDate = new Date();
+  document.getElementById('bet-modal').classList.add('open');
+}
+
+function openEditModal(id) {
+  const bet = allBets.find(b => b.id === id);
+  if (!bet) return;
+  document.getElementById('bet-id').value = id;
+  document.getElementById('bet-modal-title').textContent = 'Edit Bet';
+  document.getElementById('bet-submit-btn').textContent = 'Save Changes';
+  const form = document.getElementById('bet-form');
+  form.elements['sport'].value = bet.sport;
+  form.elements['bet_type'].value = bet.bet_type;
+  form.elements['event'].value = bet.event;
+  form.elements['odds_format'].value = 'american';
+  document.getElementById('modal-odds-input').value = bet.odds_american;
+  form.elements['units'].value = bet.units;
+  document.getElementById('modal-stake').value = bet.stake;
+  form.elements['result'].value = bet.result;
+  form.elements['notes'].value = bet.notes || '';
+  document.getElementById('modal-date').value = bet.date_placed;
+  document.getElementById('bet-modal').classList.add('open');
+}
+
+function closeBetModal() {
+  document.getElementById('bet-modal').classList.remove('open');
+}
+
+function calcModalStake() {
+  const units = parseFloat(document.getElementById('modal-units').value);
+  if (currentUnitSize > 0) {
+    document.getElementById('modal-stake').value = (units * currentUnitSize).toFixed(2);
+  }
+}
+
+function updateModalOddsPlaceholder() {
+  const fmt_sel = document.getElementById('modal-odds-format').value;
+  const ph = {american:'-110', decimal:'1.91', fractional:'10/11'};
+  document.getElementById('modal-odds-input').placeholder = ph[fmt_sel] || '-110';
+}
+
+document.getElementById('bet-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const betId = document.getElementById('bet-id').value;
+  const fd = new FormData(e.target);
+  const body = Object.fromEntries(fd.entries());
+
+  const isEdit = !!betId;
+  const url = isEdit ? '/api/bets/' + betId : '/api/bets';
+  const method = isEdit ? 'PUT' : 'POST';
+
+  const res = await fetch(url, {
+    method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (res.ok) {
+    showToast(isEdit ? 'Bet updated!' : 'Bet added!', 'success');
+    closeBetModal();
+    loadBets();
+  } else {
+    showToast(data.error || 'Error', 'error');
+  }
+});
+
+function openSettleModal(id, event) {
+  document.getElementById('settle-bet-id').value = id;
+  document.getElementById('settle-event').textContent = event;
+  document.getElementById('settle-modal').classList.add('open');
+}
+
+async function settleBet(result) {
+  const id = document.getElementById('settle-bet-id').value;
+  const res = await fetch('/api/bets/' + id, {
+    method: 'PUT',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({result}),
+  });
+  if (res.ok) {
+    document.getElementById('settle-modal').classList.remove('open');
+    showToast(`Bet settled as ${result}!`, result === 'Win' ? 'success' : 'info');
+    loadBets();
+  }
+}
+
+async function deleteBet(id) {
+  if (!confirm('Delete this bet? This cannot be undone.')) return;
+  const res = await fetch('/api/bets/' + id, {method: 'DELETE'});
+  if (res.ok) {
+    showToast('Bet deleted', 'info');
+    loadBets();
+  }
+}
+
+loadBets();
+</script>
+{% endblock %}

@@ -1,0 +1,557 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — BankrollPro{% endblock %}
+
+{% block content %}
+<div class="page">
+  <!-- Banners -->
+  <div id="banners"></div>
+
+  <!-- Page header -->
+  <div class="page-header">
+    <h1 class="page-title">DASH<span class="accent">BOARD</span></h1>
+    <p class="page-subtitle">Overview of your bankroll and active bets</p>
+  </div>
+
+  <!-- Bankroll Hero -->
+  <div class="bankroll-hero">
+    <div class="bankroll-hero-grid">
+      <div>
+        <div class="bankroll-label">Current Bankroll</div>
+        <div class="bankroll-amount" id="bankroll-amount">$0.00</div>
+        <div class="bankroll-meta">
+          <span class="bankroll-meta-item">Start: <strong id="start-bankroll">$0.00</strong></span>
+          <span class="bankroll-meta-item">P&amp;L: <strong id="total-pl" class="text-green">$0.00</strong></span>
+          <span class="bankroll-meta-item">ROI: <strong id="roi">0.0%</strong></span>
+        </div>
+      </div>
+      <div class="bankroll-right">
+        <div class="unit-display">
+          <div class="unit-label">Unit Size</div>
+          <div class="unit-value" id="unit-size">$0.00</div>
+          <div class="unit-sub" id="unit-pct">2% of bankroll</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Quick stats -->
+  <div class="grid-4 mb-16" style="margin-bottom:24px">
+    <div class="stat-card" style="--accent-color:var(--green)">
+      <div class="stat-label">Win Rate</div>
+      <div class="stat-value" id="win-rate">0%</div>
+      <div class="stat-sub" id="record">0-0-0</div>
+    </div>
+    <div class="stat-card" style="--accent-color:var(--amber)">
+      <div class="stat-label">Pending Bets</div>
+      <div class="stat-value amber" id="pending-count">0</div>
+      <div class="stat-sub" id="pending-at-risk">$0.00 at risk</div>
+    </div>
+    <div class="stat-card" style="--accent-color:var(--blue)">
+      <div class="stat-label">Total Bets</div>
+      <div class="stat-value" id="total-bets">0</div>
+      <div class="stat-sub">settled bets</div>
+    </div>
+    <div class="stat-card" style="--accent-color:var(--purple)">
+      <div class="stat-label">ROI</div>
+      <div class="stat-value" id="roi-stat">0%</div>
+      <div class="stat-sub">return on investment</div>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:2fr 1fr;gap:20px;margin-bottom:24px">
+    <!-- Bankroll chart -->
+    <div class="card">
+      <div class="section-header">
+        <div class="section-title">Bankroll History</div>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="bankroll-chart" height="180"></canvas>
+      </div>
+    </div>
+
+    <!-- Risk limits -->
+    <div class="card">
+      <div class="section-title" style="margin-bottom:16px">Risk Limits</div>
+      <div class="limit-bars" id="limit-bars">
+        <div class="text-muted" style="font-size:13px;text-align:center;padding:20px 0">No limits set</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pending bets -->
+  <div class="card" style="margin-bottom:24px">
+    <div class="section-header">
+      <div class="section-title">
+        <span style="color:var(--amber)">●</span> Pending Bets
+      </div>
+      <a href="/bets" class="btn btn-secondary btn-sm">View All</a>
+    </div>
+    <div id="pending-bets-list">
+      <div class="empty-state">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/></svg>
+        <div class="empty-state-title">No pending bets</div>
+        <div class="empty-state-desc">Add a bet to get started</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Quick add bet + recent bets -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+    <div class="card">
+      <div class="section-title" style="margin-bottom:16px">Quick Add Bet</div>
+      <form id="quick-bet-form">
+        <div class="form-row cols-2" style="margin-bottom:12px">
+          <div class="form-group">
+            <label class="form-label">Sport</label>
+            <select class="form-select" name="sport" required>
+              <option value="">Select...</option>
+              <option>NHL</option><option>NBA</option><option>NFL</option>
+              <option>MLB</option><option>UFC</option><option>Soccer</option>
+              <option>Tennis</option><option>Other</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Bet Type</label>
+            <select class="form-select" name="bet_type" required>
+              <option value="">Select...</option>
+              <option>Moneyline</option><option>Spread</option><option>Over/Under</option>
+              <option>Parlay</option><option>Prop</option><option>Other</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group" style="margin-bottom:12px">
+          <label class="form-label">Event / Teams</label>
+          <input class="form-input" name="event" placeholder="e.g. Maple Leafs vs Bruins" required>
+        </div>
+        <div class="form-row cols-3" style="margin-bottom:12px">
+          <div class="form-group">
+            <label class="form-label">Odds Format</label>
+            <select class="form-select" name="odds_format" id="qb-odds-format" onchange="updateOddsPlaceholder('qb')">
+              <option value="american">American</option>
+              <option value="decimal">Decimal</option>
+              <option value="fractional">Fractional</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Odds</label>
+            <input class="form-input" name="odds_value" id="qb-odds" placeholder="-110" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Units (1–5)</label>
+            <select class="form-select" name="units" onchange="calcQuickStake(this)">
+              <option value="1">1 Unit</option><option value="2">2 Units</option>
+              <option value="3">3 Units</option><option value="4">4 Units</option>
+              <option value="5">5 Units</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row cols-2" style="margin-bottom:14px">
+          <div class="form-group">
+            <label class="form-label">Stake ($)</label>
+            <input class="form-input" name="stake" id="qb-stake" type="number" step="0.01" min="0.01" placeholder="0.00" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Date</label>
+            <input class="form-input" name="date_placed" type="date" id="qb-date">
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" x2="12" y1="5" y2="19"/><line x1="5" x2="19" y1="12" y2="12"/></svg>
+          Add Bet
+        </button>
+      </form>
+    </div>
+
+    <!-- Recent settled bets -->
+    <div class="card">
+      <div class="section-header">
+        <div class="section-title">Recent Results</div>
+        <a href="/bets" class="btn btn-ghost btn-sm">All Bets</a>
+      </div>
+      <div id="recent-bets-list">
+        <div class="empty-state">
+          <div class="empty-state-desc">No settled bets yet</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Deposit / Withdrawal section -->
+  <div class="card" style="margin-top:20px">
+    <div class="section-header">
+      <div class="section-title">Bankroll Transactions</div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-secondary btn-sm" onclick="openTxnModal('deposit')">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>
+          Deposit
+        </button>
+        <button class="btn btn-secondary btn-sm" onclick="openTxnModal('withdrawal')">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg>
+          Withdraw
+        </button>
+      </div>
+    </div>
+    <div id="txn-list">
+      <div class="empty-state" style="padding:20px">
+        <div class="empty-state-desc">No transactions yet</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Transaction modal -->
+<div class="modal-overlay" id="txn-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="txn-modal-title">Deposit</div>
+      <button class="modal-close" onclick="closeTxnModal()">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></svg>
+      </button>
+    </div>
+    <form id="txn-form">
+      <input type="hidden" name="type" id="txn-type">
+      <div class="form-row cols-2" style="margin-bottom:14px">
+        <div class="form-group">
+          <label class="form-label">Amount ($)</label>
+          <input class="form-input" name="amount" type="number" step="0.01" min="0.01" placeholder="0.00" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Date</label>
+          <input class="form-input" name="date" type="date" id="txn-date">
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:14px">
+        <label class="form-label">Notes (optional)</label>
+        <input class="form-input" name="notes" placeholder="e.g. Initial deposit">
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeTxnModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="txn-submit-btn">Add Deposit</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+let dashData = {};
+let bankrollChart = null;
+
+// Set today's date
+document.getElementById('qb-date').valueAsDate = new Date();
+document.getElementById('txn-date').valueAsDate = new Date();
+
+async function loadDashboard() {
+  const res = await fetch('/api/dashboard');
+  dashData = await res.json();
+  renderDashboard(dashData);
+}
+
+function renderDashboard(d) {
+  // User badge
+  if (d.user && d.user.name) {
+    const badge = document.getElementById('user-badge');
+    badge.style.display = 'flex';
+    document.getElementById('user-name').textContent = d.user.name;
+    if (d.user.picture) document.getElementById('user-pic').src = d.user.picture;
+  }
+
+  // Bankroll
+  const bankrollEl = document.getElementById('bankroll-amount');
+  bankrollEl.textContent = fmt(d.bankroll);
+  bankrollEl.className = 'bankroll-amount' + (d.bankroll < 0 ? ' negative' : '');
+
+  document.getElementById('start-bankroll').textContent = fmt(d.starting_bankroll);
+  const plEl = document.getElementById('total-pl');
+  plEl.textContent = (d.stats.total_pl >= 0 ? '+' : '') + fmt(d.stats.total_pl);
+  plEl.className = d.stats.total_pl >= 0 ? 'text-green' : 'text-red';
+  document.getElementById('roi').textContent = (d.stats.roi >= 0 ? '+' : '') + d.stats.roi + '%';
+
+  // Unit
+  document.getElementById('unit-size').textContent = fmt(d.unit_size);
+  document.getElementById('unit-pct').textContent = d.unit_size_pct + '% of bankroll';
+
+  // Stats
+  document.getElementById('win-rate').textContent = d.stats.win_rate + '%';
+  document.getElementById('record').textContent = `${d.stats.wins}W - ${d.stats.losses}L`;
+  document.getElementById('total-bets').textContent = d.stats.total_bets;
+  const roiStatEl = document.getElementById('roi-stat');
+  roiStatEl.textContent = (d.stats.roi >= 0 ? '+' : '') + d.stats.roi + '%';
+  roiStatEl.className = 'stat-value ' + (d.stats.roi >= 0 ? 'green' : 'red');
+
+  // Pending
+  const pendingCount = d.pending_bets.length;
+  document.getElementById('pending-count').textContent = pendingCount;
+  const atRisk = d.pending_bets.reduce((s, b) => s + b.stake, 0);
+  document.getElementById('pending-at-risk').textContent = fmt(atRisk) + ' at risk';
+
+  // Risk limits + banners
+  renderLimits(d.limits);
+
+  // Pending bets list
+  renderPendingBets(d.pending_bets);
+
+  // Recent bets
+  renderRecentBets(d.recent_bets);
+
+  // Transactions
+  loadTransactions();
+
+  // Chart
+  renderBankrollChart(d.bankroll_history);
+}
+
+function renderLimits(limits) {
+  const container = document.getElementById('limit-bars');
+  const bannerContainer = document.getElementById('banners');
+  bannerContainer.innerHTML = '';
+
+  const limitDefs = [
+    { key: 'daily',   label: 'Daily' },
+    { key: 'weekly',  label: 'Weekly' },
+    { key: 'monthly', label: 'Monthly' },
+  ];
+
+  const hasLimits = limitDefs.some(l => limits[l.key].limit > 0);
+  if (!hasLimits) {
+    container.innerHTML = '<div class="text-muted" style="font-size:13px;text-align:center;padding:20px 0">No limits configured — <a href="/settings" style="color:var(--blue)">set in Settings</a></div>';
+    return;
+  }
+
+  let html = '';
+  for (const l of limitDefs) {
+    const lim = limits[l.key];
+    if (lim.limit <= 0) continue;
+    const pct = Math.min(lim.used / lim.limit * 100, 100);
+    const cls = pct >= 100 ? 'danger' : pct >= 80 ? 'warning' : 'ok';
+    html += `
+      <div class="limit-row">
+        <div class="limit-row-header">
+          <span class="limit-row-label">${l.label} Loss</span>
+          <div style="display:flex;gap:8px;align-items:center">
+            <span class="limit-row-values">${fmt(lim.used)} / ${fmt(lim.limit)}</span>
+            <span class="limit-badge ${cls}">${pct >= 100 ? 'LIMIT HIT' : pct >= 80 ? 'WARNING' : 'OK'}</span>
+          </div>
+        </div>
+        <div class="limit-bar-track">
+          <div class="limit-bar-fill ${cls}" style="width:${pct}%"></div>
+        </div>
+      </div>`;
+
+    if (pct >= 100) {
+      bannerContainer.innerHTML += `<div class="danger-banner"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>${l.label} loss limit reached! You have lost ${fmt(lim.used)} today vs your ${fmt(lim.limit)} limit.</div>`;
+    } else if (pct >= 80) {
+      bannerContainer.innerHTML += `<div class="warning-banner"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>Approaching ${l.label.toLowerCase()} loss limit: ${fmt(lim.used)} of ${fmt(lim.limit)} used (${Math.round(pct)}%).</div>`;
+    }
+  }
+  container.innerHTML = html;
+}
+
+function renderPendingBets(bets) {
+  const el = document.getElementById('pending-bets-list');
+  if (!bets.length) {
+    el.innerHTML = '<div class="empty-state"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/></svg><div class="empty-state-title">No pending bets</div><div class="empty-state-desc">All clear — add a bet to track it</div></div>';
+    return;
+  }
+  el.innerHTML = '<div style="display:flex;flex-direction:column;gap:8px">' + bets.map(b => `
+    <div class="pending-card">
+      <span class="sport-badge" style="color:${sportColor(b.sport)};border-left:2px solid ${sportColor(b.sport)}">${b.sport}</span>
+      <div>
+        <div class="pending-event">${b.event}</div>
+        <div class="pending-meta">${b.bet_type} · ${fmtOdds(b.odds_american)} · ${b.units}u · ${fmt(b.stake)} · ${fmtDate(b.date_placed)}</div>
+      </div>
+      <div class="pending-right">
+        <div class="potential-profit">+${fmt(b.potential_profit)}</div>
+        <div class="potential-label">Potential Profit</div>
+      </div>
+    </div>`).join('') + '</div>';
+}
+
+function renderRecentBets(bets) {
+  const el = document.getElementById('recent-bets-list');
+  if (!bets.length) {
+    el.innerHTML = '<div class="empty-state"><div class="empty-state-desc">No settled bets yet</div></div>';
+    return;
+  }
+  el.innerHTML = '<div style="display:flex;flex-direction:column;gap:2px">' + bets.map(b => {
+    const isPos = b.profit_loss > 0;
+    return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+      <span class="sport-badge" style="font-size:8px;padding:2px 5px">${b.sport}</span>
+      <span style="flex:1;font-size:12px;color:var(--text-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${b.event}</span>
+      <span class="result-badge ${b.result}">${b.result}</span>
+      <span class="text-mono" style="color:${isPos?'var(--green)':b.profit_loss<0?'var(--red)':'var(--text-3)'}">${isPos?'+':''}${fmt(b.profit_loss)}</span>
+    </div>`;
+  }).join('') + '</div>';
+}
+
+function renderBankrollChart(history) {
+  const ctx = document.getElementById('bankroll-chart').getContext('2d');
+  if (bankrollChart) bankrollChart.destroy();
+
+  if (!history.length) {
+    ctx.canvas.style.display = 'none';
+    return;
+  }
+  ctx.canvas.style.display = 'block';
+
+  const labels = history.map(h => h.date);
+  const data   = history.map(h => h.balance);
+  const startVal = data[0] || 0;
+  const isUp = data[data.length-1] >= startVal;
+  const color = isUp ? '#00e676' : '#ff1744';
+
+  bankrollChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        data,
+        borderColor: color,
+        borderWidth: 2,
+        fill: true,
+        backgroundColor: (ctx) => {
+          const g = ctx.chart.ctx.createLinearGradient(0, 0, 0, 200);
+          g.addColorStop(0, isUp ? 'rgba(0,230,118,0.15)' : 'rgba(255,23,68,0.15)');
+          g.addColorStop(1, 'rgba(0,0,0,0)');
+          return g;
+        },
+        tension: 0.4,
+        pointRadius: 0,
+        pointHoverRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      interaction: { intersect: false, mode: 'index' },
+      plugins: { legend: { display: false }, tooltip: {
+        backgroundColor: '#0f1528',
+        borderColor: 'rgba(80,110,180,0.18)',
+        borderWidth: 1,
+        titleColor: '#8899b4',
+        bodyColor: '#dde4f0',
+        callbacks: {
+          title: items => fmtDate(items[0].label),
+          label: item => ' ' + fmt(item.raw),
+        }
+      }},
+      scales: {
+        x: { display: false },
+        y: {
+          grid: { color: 'rgba(80,110,180,0.08)' },
+          ticks: { color: '#4a5a78', font: { family: 'Space Mono', size: 10 },
+            callback: v => '$' + (v>=1000 ? (v/1000).toFixed(1)+'k' : v.toFixed(0)) }
+        }
+      }
+    }
+  });
+}
+
+async function loadTransactions() {
+  const res = await fetch('/api/transactions');
+  const txns = await res.json();
+  const el = document.getElementById('txn-list');
+  if (!txns.length) {
+    el.innerHTML = '<div class="empty-state" style="padding:20px"><div class="empty-state-desc">No transactions yet — use Deposit to set your starting bankroll</div></div>';
+    return;
+  }
+  el.innerHTML = '<div style="max-height:200px;overflow-y:auto">' + txns.slice(0, 20).map(t => `
+    <div class="txn-item">
+      <div class="txn-icon ${t.type}">
+        ${t.type==='deposit'
+          ? '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>'
+          : '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg>'}
+      </div>
+      <div class="txn-info">
+        <div class="txn-label">${t.type.charAt(0).toUpperCase()+t.type.slice(1)}${t.notes ? ' — '+t.notes : ''}</div>
+        <div class="txn-date">${fmtDate(t.date)}</div>
+      </div>
+      <div class="txn-amount ${t.type}">${t.type==='deposit'?'+':'-'}${fmt(t.amount)}</div>
+      <button class="btn btn-ghost btn-sm btn-icon" onclick="deleteTxn(${t.id})" title="Delete">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+      </button>
+    </div>`).join('') + '</div>';
+}
+
+async function deleteTxn(id) {
+  if (!confirm('Delete this transaction?')) return;
+  await fetch('/api/transactions/'+id, {method:'DELETE'});
+  showToast('Transaction deleted', 'info');
+  loadDashboard();
+}
+
+// Odds placeholder
+function updateOddsPlaceholder(prefix) {
+  const fmt_sel = document.getElementById(prefix+'-odds-format');
+  const inp = document.getElementById(prefix+'-odds');
+  const ph = {american:'-110', decimal:'1.91', fractional:'10/11'};
+  inp.placeholder = ph[fmt_sel.value] || '-110';
+}
+
+// Auto-calc stake from units
+function calcQuickStake(sel) {
+  const units = parseFloat(sel.value);
+  if (dashData.unit_size) {
+    document.getElementById('qb-stake').value = (units * dashData.unit_size).toFixed(2);
+  }
+}
+
+// Quick add bet form
+document.getElementById('quick-bet-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const body = Object.fromEntries(fd.entries());
+  body.result = 'Pending';
+  const res = await fetch('/api/bets', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (res.ok) {
+    showToast('Bet added!', 'success');
+    e.target.reset();
+    document.getElementById('qb-date').valueAsDate = new Date();
+    loadDashboard();
+  } else {
+    showToast(data.error || 'Error adding bet', 'error');
+  }
+});
+
+// Transaction modal
+function openTxnModal(type) {
+  document.getElementById('txn-type').value = type;
+  document.getElementById('txn-modal-title').textContent = type === 'deposit' ? 'Deposit Funds' : 'Withdraw Funds';
+  document.getElementById('txn-submit-btn').textContent = type === 'deposit' ? 'Add Deposit' : 'Add Withdrawal';
+  document.getElementById('txn-modal').classList.add('open');
+}
+function closeTxnModal() {
+  document.getElementById('txn-modal').classList.remove('open');
+  document.getElementById('txn-form').reset();
+  document.getElementById('txn-date').valueAsDate = new Date();
+}
+
+document.getElementById('txn-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const body = Object.fromEntries(fd.entries());
+  const res = await fetch('/api/transactions', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (res.ok) {
+    showToast('Transaction added!', 'success');
+    closeTxnModal();
+    loadDashboard();
+  } else {
+    showToast(data.error || 'Error', 'error');
+  }
+});
+
+loadDashboard();
+</script>
+{% endblock %}

@@ -1,0 +1,322 @@
+{% extends "base.html" %}
+{% block title %}Settings — BankrollPro{% endblock %}
+
+{% block content %}
+<div class="page">
+  <div class="page-header">
+    <h1 class="page-title">SET<span class="accent">TINGS</span></h1>
+    <p class="page-subtitle">Configure your bankroll, unit size, and risk limits</p>
+  </div>
+
+  <!-- Bankroll settings -->
+  <div class="grid-2" style="margin-bottom:24px;align-items:start">
+    <div class="card">
+      <div class="card-title" style="margin-bottom:20px">Bankroll Configuration</div>
+
+      <div style="background:var(--bg-3);border:1px solid var(--border-2);border-radius:var(--rs);padding:16px 20px;margin-bottom:20px">
+        <div style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:4px">Current Balance</div>
+        <div style="font-family:var(--font-d);font-size:44px;color:var(--green);text-shadow:0 0 30px var(--green-glow)" id="current-balance">Loading...</div>
+        <div style="font-size:12px;color:var(--text-3);margin-top:4px">Starting bankroll + deposits − withdrawals + P&amp;L</div>
+      </div>
+
+      <form id="settings-form">
+        <div class="form-group" style="margin-bottom:16px">
+          <label class="form-label">Starting Bankroll ($)</label>
+          <input class="form-input" id="starting-bankroll" name="starting_bankroll" type="number" step="0.01" min="0" placeholder="0.00">
+          <div style="font-size:11px;color:var(--text-3);margin-top:4px">The baseline value before any deposits or bets</div>
+        </div>
+
+        <div class="form-group" style="margin-bottom:20px">
+          <label class="form-label">Unit Size (% of bankroll)</label>
+          <div style="display:flex;gap:10px;align-items:center">
+            <input type="range" id="unit-slider" min="0.5" max="10" step="0.5" value="2"
+              style="flex:1;accent-color:var(--purple)" oninput="updateUnitDisplay()">
+            <input class="form-input" id="unit-size-pct" name="unit_size_pct" type="number" step="0.1" min="0.1" max="100"
+              style="width:90px" oninput="syncUnitSlider()">
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-top:6px">
+            <span style="font-size:11px;color:var(--text-3)">1 unit = <strong style="color:var(--purple)" id="unit-dollar">$0.00</strong></span>
+            <span style="font-size:11px;color:var(--text-3)">5 units = <strong style="color:var(--purple)" id="unit-5-dollar">$0.00</strong></span>
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary" style="width:100%">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+          Save Settings
+        </button>
+      </form>
+    </div>
+
+    <!-- Risk limits -->
+    <div class="card">
+      <div class="card-title" style="margin-bottom:6px">Risk Management Limits</div>
+      <div style="font-size:12px;color:var(--text-3);margin-bottom:20px">Set to 0 to disable a limit. Limits track losses for the period.</div>
+
+      <form id="limits-form">
+        <div class="form-group" style="margin-bottom:16px">
+          <label class="form-label">Daily Loss Limit ($)</label>
+          <input class="form-input" id="daily-limit" name="daily_limit" type="number" step="0.01" min="0" placeholder="e.g. 100">
+          <div style="font-size:11px;color:var(--text-3);margin-top:4px">Max loss per day before warning</div>
+        </div>
+
+        <div class="form-group" style="margin-bottom:16px">
+          <label class="form-label">Weekly Loss Limit ($)</label>
+          <input class="form-input" id="weekly-limit" name="weekly_limit" type="number" step="0.01" min="0" placeholder="e.g. 300">
+          <div style="font-size:11px;color:var(--text-3);margin-top:4px">Max loss per week before warning</div>
+        </div>
+
+        <div class="form-group" style="margin-bottom:20px">
+          <label class="form-label">Monthly Loss Limit ($)</label>
+          <input class="form-input" id="monthly-limit" name="monthly_limit" type="number" step="0.01" min="0" placeholder="e.g. 1000">
+          <div style="font-size:11px;color:var(--text-3);margin-top:4px">Max loss per month before warning</div>
+        </div>
+
+        <button type="submit" class="btn btn-secondary" style="width:100%">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          Save Limits
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Unit size guide -->
+  <div class="card" style="margin-bottom:24px">
+    <div class="card-title" style="margin-bottom:16px">Unit Confidence Levels</div>
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px" id="unit-guide"></div>
+  </div>
+
+  <!-- Deposit/withdrawal history -->
+  <div class="card" style="margin-bottom:24px">
+    <div class="section-header">
+      <div class="section-title">Transaction History</div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-secondary btn-sm" onclick="openTxnModal('deposit')">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>
+          Deposit
+        </button>
+        <button class="btn btn-secondary btn-sm" onclick="openTxnModal('withdrawal')">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg>
+          Withdraw
+        </button>
+      </div>
+    </div>
+    <div id="txn-history">
+      <div class="empty-state" style="padding:24px">
+        <div class="empty-state-desc">No transactions yet</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Account info -->
+  <div class="card">
+    <div class="card-title" style="margin-bottom:16px">Account</div>
+    <div style="display:flex;align-items:center;gap:16px">
+      <img id="settings-avatar" src="" alt="avatar" style="width:52px;height:52px;border-radius:50%;border:2px solid var(--border-2)">
+      <div>
+        <div style="font-size:16px;font-weight:700;color:var(--text)" id="settings-name">—</div>
+        <div style="font-size:13px;color:var(--text-3)" id="settings-email">—</div>
+      </div>
+      <a href="/logout" class="btn btn-danger btn-sm" style="margin-left:auto">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
+        Sign Out
+      </a>
+    </div>
+  </div>
+</div>
+
+<!-- Transaction modal -->
+<div class="modal-overlay" id="txn-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="txn-modal-title">Add Transaction</div>
+      <button class="modal-close" onclick="closeTxnModal()">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></svg>
+      </button>
+    </div>
+    <form id="txn-form">
+      <input type="hidden" name="type" id="txn-type">
+      <div class="form-row cols-2" style="margin-bottom:14px">
+        <div class="form-group">
+          <label class="form-label">Amount ($)</label>
+          <input class="form-input" name="amount" type="number" step="0.01" min="0.01" placeholder="0.00" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Date</label>
+          <input class="form-input" name="date" type="date" id="txn-date">
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:14px">
+        <label class="form-label">Notes (optional)</label>
+        <input class="form-input" name="notes" placeholder="e.g. Initial deposit">
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeTxnModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="txn-submit-btn">Add</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentBankroll = 0;
+let currentUnitPct = 2;
+
+document.getElementById('txn-date').valueAsDate = new Date();
+
+async function loadSettings() {
+  const [settingsRes, dashRes, txnRes] = await Promise.all([
+    fetch('/api/settings'),
+    fetch('/api/dashboard'),
+    fetch('/api/transactions'),
+  ]);
+  const settings = await settingsRes.json();
+  const dash = await dashRes.json();
+  const txns = await txnRes.json();
+
+  currentBankroll = dash.bankroll;
+  currentUnitPct = settings.unit_size_pct;
+
+  // Balance display
+  document.getElementById('current-balance').textContent = fmt(dash.bankroll);
+
+  // Form values
+  document.getElementById('starting-bankroll').value = settings.starting_bankroll;
+  document.getElementById('unit-size-pct').value = settings.unit_size_pct;
+  document.getElementById('unit-slider').value = Math.min(settings.unit_size_pct, 10);
+  document.getElementById('daily-limit').value = settings.daily_limit || '';
+  document.getElementById('weekly-limit').value = settings.weekly_limit || '';
+  document.getElementById('monthly-limit').value = settings.monthly_limit || '';
+
+  updateUnitDisplay();
+  renderUnitGuide(dash.bankroll, settings.unit_size_pct);
+
+  // Account info
+  if (dash.user) {
+    document.getElementById('settings-name').textContent = dash.user.name || '—';
+    if (dash.user.picture) document.getElementById('settings-avatar').src = dash.user.picture;
+  }
+
+  renderTxnHistory(txns);
+}
+
+function updateUnitDisplay() {
+  const pct = parseFloat(document.getElementById('unit-size-pct').value) || currentUnitPct;
+  document.getElementById('unit-dollar').textContent = fmt(currentBankroll * pct / 100);
+  document.getElementById('unit-5-dollar').textContent = fmt(currentBankroll * pct / 100 * 5);
+}
+
+function syncUnitSlider() {
+  const val = parseFloat(document.getElementById('unit-size-pct').value);
+  document.getElementById('unit-slider').value = Math.min(val, 10);
+  updateUnitDisplay();
+}
+
+function renderUnitGuide(bankroll, unitPct) {
+  const unitSize = bankroll * unitPct / 100;
+  const container = document.getElementById('unit-guide');
+  const levels = [1,2,3,4,5];
+  const labels = ['Conservative','Low','Standard','High','Aggressive'];
+  const colors = ['var(--green)','var(--blue)','var(--purple)','var(--amber)','var(--red)'];
+
+  container.innerHTML = levels.map((u, i) => `
+    <div style="background:var(--bg-3);border:1px solid var(--border-2);border-radius:var(--rs);padding:14px;text-align:center">
+      <div style="font-family:var(--font-d);font-size:28px;color:${colors[i]}">${u}u</div>
+      <div style="font-family:var(--font-m);font-size:14px;color:var(--text);margin:4px 0">${fmt(unitSize * u)}</div>
+      <div style="font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:0.5px">${labels[i]}</div>
+    </div>`).join('');
+}
+
+function renderTxnHistory(txns) {
+  const el = document.getElementById('txn-history');
+  if (!txns.length) {
+    el.innerHTML = '<div class="empty-state" style="padding:24px"><div class="empty-state-desc">No transactions yet</div></div>';
+    return;
+  }
+  el.innerHTML = '<div style="max-height:300px;overflow-y:auto">' + txns.map(t => `
+    <div class="txn-item">
+      <div class="txn-icon ${t.type}">
+        ${t.type==='deposit'
+          ? '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>'
+          : '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg>'}
+      </div>
+      <div class="txn-info">
+        <div class="txn-label">${t.type.charAt(0).toUpperCase()+t.type.slice(1)}${t.notes ? ' — '+t.notes : ''}</div>
+        <div class="txn-date">${fmtDate(t.date)}</div>
+      </div>
+      <div class="txn-amount ${t.type}">${t.type==='deposit'?'+':'-'}${fmt(t.amount)}</div>
+      <button class="btn btn-ghost btn-sm btn-icon" onclick="deleteTxn(${t.id})" title="Delete">
+        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+      </button>
+    </div>`).join('') + '</div>';
+}
+
+document.getElementById('settings-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const body = Object.fromEntries(fd.entries());
+  const res = await fetch('/api/settings', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (res.ok) { showToast('Settings saved!', 'success'); loadSettings(); }
+  else         { showToast(data.error || 'Error', 'error'); }
+});
+
+document.getElementById('limits-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const body = {
+    daily_limit:   parseFloat(fd.get('daily_limit'))   || 0,
+    weekly_limit:  parseFloat(fd.get('weekly_limit'))  || 0,
+    monthly_limit: parseFloat(fd.get('monthly_limit')) || 0,
+  };
+  const res = await fetch('/api/settings', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (res.ok) { showToast('Limits saved!', 'success'); }
+  else         { showToast(data.error || 'Error', 'error'); }
+});
+
+function openTxnModal(type) {
+  document.getElementById('txn-type').value = type;
+  document.getElementById('txn-modal-title').textContent = type === 'deposit' ? 'Deposit Funds' : 'Withdraw Funds';
+  document.getElementById('txn-submit-btn').textContent = type === 'deposit' ? 'Add Deposit' : 'Add Withdrawal';
+  document.getElementById('txn-modal').classList.add('open');
+}
+function closeTxnModal() {
+  document.getElementById('txn-modal').classList.remove('open');
+  document.getElementById('txn-form').reset();
+  document.getElementById('txn-date').valueAsDate = new Date();
+}
+
+document.getElementById('txn-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const body = Object.fromEntries(fd.entries());
+  const res = await fetch('/api/transactions', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (res.ok) { showToast('Transaction added!', 'success'); closeTxnModal(); loadSettings(); }
+  else         { showToast(data.error || 'Error', 'error'); }
+});
+
+async function deleteTxn(id) {
+  if (!confirm('Delete this transaction?')) return;
+  await fetch('/api/transactions/'+id, {method:'DELETE'});
+  showToast('Transaction deleted', 'info');
+  loadSettings();
+}
+
+loadSettings();
+</script>
+{% endblock %}

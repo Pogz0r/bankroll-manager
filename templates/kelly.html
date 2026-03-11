@@ -1,0 +1,292 @@
+{% extends "base.html" %}
+{% block title %}Kelly Calculator — BankrollPro{% endblock %}
+
+{% block content %}
+<div class="page">
+  <div class="page-header">
+    <h1 class="page-title">KELLY <span class="accent">CRITERION</span></h1>
+    <p class="page-subtitle">Calculate optimal bet sizing based on edge and odds</p>
+  </div>
+
+  <!-- Explainer -->
+  <div style="background:var(--blue-dim);border:1px solid rgba(68,138,255,0.15);border-radius:var(--r);padding:14px 18px;margin-bottom:24px;font-size:13px;color:var(--text-2)">
+    <strong style="color:var(--blue)">Kelly Criterion</strong> — The optimal fraction of your bankroll to wager: <code style="font-family:var(--font-m);color:var(--purple);font-size:12px">f* = (bp - q) / b</code> where <em>b</em> = decimal odds − 1, <em>p</em> = win probability, <em>q</em> = loss probability. Use <strong style="color:var(--text)">Half Kelly</strong> for a safer approach.
+  </div>
+
+  <div style="display:grid;grid-template-columns:400px 1fr;gap:24px;align-items:start">
+    <!-- Input panel -->
+    <div class="card">
+      <div class="card-title" style="margin-bottom:20px">Bet Parameters</div>
+
+      <div class="form-group" style="margin-bottom:18px">
+        <label class="form-label">Win Probability (%)</label>
+        <div style="position:relative">
+          <input type="range" id="prob-slider" min="1" max="99" value="52" style="width:100%;accent-color:var(--purple);margin-bottom:8px" oninput="updateProbDisplay()">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span style="font-size:11px;color:var(--text-3)">1%</span>
+            <input type="number" class="form-input" id="win-prob" value="52" min="1" max="99" step="0.5"
+              style="width:90px;text-align:center;font-family:var(--font-d);font-size:24px;padding:6px"
+              oninput="syncSlider()">
+            <span style="font-size:11px;color:var(--text-3)">99%</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-bottom:14px">
+        <label class="form-label">Odds Format</label>
+        <div class="odds-toggle" style="margin-bottom:8px">
+          <button class="odds-toggle-btn active" onclick="setOddsFmt('american',this)" id="k-fmt-american">American</button>
+          <button class="odds-toggle-btn" onclick="setOddsFmt('decimal',this)" id="k-fmt-decimal">Decimal</button>
+          <button class="odds-toggle-btn" onclick="setOddsFmt('fractional',this)" id="k-fmt-fractional">Fractional</button>
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-bottom:22px">
+        <label class="form-label">Odds</label>
+        <input class="form-input" id="kelly-odds" placeholder="-110" style="font-family:var(--font-m);font-size:16px"
+          oninput="clearResult()">
+        <div style="font-size:11px;color:var(--text-3);margin-top:4px" id="odds-hint">Enter American odds (e.g. -110, +150)</div>
+      </div>
+
+      <button class="btn btn-primary" style="width:100%;font-size:16px;padding:12px" onclick="calculateKelly()">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="16" height="20" x="4" y="2" rx="2"/><line x1="8" x2="16" y1="6" y2="6"/><line x1="8" x2="10" y1="10" y2="10"/><line x1="14" x2="16" y1="10" y2="10"/><line x1="8" x2="10" y1="14" y2="14"/><line x1="14" x2="16" y1="14" y2="14"/></svg>
+        Calculate Kelly
+      </button>
+    </div>
+
+    <!-- Results panel -->
+    <div id="results-panel">
+      <!-- Placeholder -->
+      <div class="card" id="results-placeholder" style="text-align:center;padding:60px 20px">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" style="width:48px;height:48px;margin:0 auto 16px;color:var(--text-3)"><rect width="16" height="20" x="4" y="2" rx="2"/><line x1="8" x2="16" y1="6" y2="6"/><line x1="8" x2="10" y1="10" y2="10"/><line x1="14" x2="16" y1="10" y2="10"/><line x1="8" x2="10" y1="14" y2="14"/><line x1="14" x2="16" y1="14" y2="14"/></svg>
+        <div style="font-family:var(--font-d);font-size:22px;color:var(--text-2);margin-bottom:8px">Enter Your Parameters</div>
+        <div style="font-size:13px;color:var(--text-3)">Set your estimated win probability and the odds being offered, then click Calculate Kelly</div>
+      </div>
+
+      <!-- Actual results (hidden until calculated) -->
+      <div id="kelly-results" style="display:none">
+        <!-- Odds breakdown -->
+        <div class="grid-3" style="margin-bottom:18px">
+          <div class="stat-card" style="--accent-color:var(--blue)">
+            <div class="stat-label">Your Edge</div>
+            <div class="stat-value" id="r-edge">—</div>
+            <div class="stat-sub">vs implied prob</div>
+          </div>
+          <div class="stat-card" style="--accent-color:var(--amber)">
+            <div class="stat-label">Implied Prob</div>
+            <div class="stat-value amber" id="r-implied">—</div>
+            <div class="stat-sub">from odds</div>
+          </div>
+          <div class="stat-card" style="--accent-color:var(--purple)">
+            <div class="stat-label">Decimal Odds</div>
+            <div class="stat-value" id="r-decimal">—</div>
+            <div class="stat-sub" id="r-fractional">—</div>
+          </div>
+        </div>
+
+        <!-- EV Banner -->
+        <div id="ev-banner" style="margin-bottom:18px"></div>
+
+        <!-- Kelly table -->
+        <div class="kelly-result">
+          <div class="kelly-result-header">
+            <div style="font-family:var(--font-d);font-size:18px;letter-spacing:1px">Kelly Recommendations</div>
+            <div>
+              <span style="font-size:11px;color:var(--text-3)">Bankroll: </span>
+              <span style="font-family:var(--font-m);font-size:13px;color:var(--text)" id="r-bankroll">$0.00</span>
+            </div>
+          </div>
+          <div class="kelly-rows">
+            <div class="kelly-row kelly-row-header">
+              <div class="kelly-row-label"></div>
+              <div class="kelly-row-cell">% of Bankroll</div>
+              <div class="kelly-row-cell">Dollar Amount</div>
+              <div class="kelly-row-cell">Units</div>
+            </div>
+            <div class="kelly-row kelly-full">
+              <div class="kelly-row-label">Full</div>
+              <div class="kelly-row-cell"><div class="kelly-cell-pct" id="k-full-pct">0%</div></div>
+              <div class="kelly-row-cell"><div class="kelly-cell-amount" id="k-full-amt">$0.00</div></div>
+              <div class="kelly-row-cell"><div class="kelly-cell-units" id="k-full-units">0u</div></div>
+            </div>
+            <div class="kelly-row">
+              <div class="kelly-row-label" style="color:var(--green)">½</div>
+              <div class="kelly-row-cell"><div class="kelly-cell-pct" style="font-size:22px;color:var(--green)" id="k-half-pct">0%</div></div>
+              <div class="kelly-row-cell"><div class="kelly-cell-amount" id="k-half-amt">$0.00</div></div>
+              <div class="kelly-row-cell"><div class="kelly-cell-units" id="k-half-units">0u</div></div>
+            </div>
+            <div class="kelly-row">
+              <div class="kelly-row-label">¼</div>
+              <div class="kelly-row-cell"><div class="kelly-cell-pct" style="font-size:18px" id="k-quarter-pct">0%</div></div>
+              <div class="kelly-row-cell"><div class="kelly-cell-amount" id="k-quarter-amt">$0.00</div></div>
+              <div class="kelly-row-cell"><div class="kelly-cell-units" id="k-quarter-units">0u</div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Recommendation -->
+        <div id="kelly-recommendation" style="margin-top:16px"></div>
+
+        <!-- What these mean -->
+        <div class="card" style="margin-top:16px;padding:16px 20px">
+          <div class="card-title" style="margin-bottom:12px">How to Use This</div>
+          <div style="font-size:13px;color:var(--text-2);line-height:1.7">
+            <p><strong style="color:var(--text)">Full Kelly</strong> maximizes long-term growth but leads to large swings. Only use if your probability estimates are very precise.</p>
+            <p style="margin-top:8px"><strong style="color:var(--green)">Half Kelly</strong> (recommended) reduces variance by 50% while retaining ~75% of the growth rate. Good balance for most bettors.</p>
+            <p style="margin-top:8px"><strong style="color:var(--text)">Quarter Kelly</strong> is the most conservative. Use when uncertain about your edge.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Quick reference table -->
+  <div class="card" style="margin-top:24px">
+    <div class="card-title" style="margin-bottom:16px">Common Odds Reference</div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>American</th><th>Decimal</th><th>Fractional</th>
+            <th>Implied Prob</th><th>Break-even Win%</th>
+          </tr>
+        </thead>
+        <tbody id="odds-ref-table"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let oddsFmt = 'american';
+
+const COMMON_ODDS = [
+  {a:-200,d:1.5,f:'1/2'}, {a:-150,d:1.67,f:'2/3'}, {a:-130,d:1.77,f:'10/13'},
+  {a:-120,d:1.83,f:'5/6'}, {a:-110,d:1.91,f:'10/11'}, {a:100,d:2.0,f:'1/1'},
+  {a:110,d:2.1,f:'11/10'}, {a:120,d:2.2,f:'6/5'}, {a:130,d:2.3,f:'13/10'},
+  {a:150,d:2.5,f:'3/2'}, {a:200,d:3.0,f:'2/1'}, {a:250,d:3.5,f:'5/2'},
+];
+
+// Populate ref table
+document.getElementById('odds-ref-table').innerHTML = COMMON_ODDS.map(o => {
+  const impliedPct = (1/o.d*100).toFixed(1);
+  const breakEven = impliedPct;
+  return `<tr>
+    <td class="mono">${fmtOdds(o.a)}</td>
+    <td class="mono">${o.d.toFixed(2)}</td>
+    <td class="mono">${o.f}</td>
+    <td style="color:var(--text-2)">${impliedPct}%</td>
+    <td style="color:var(--text-3)">${breakEven}%</td>
+  </tr>`;
+}).join('');
+
+function setOddsFmt(f, btn) {
+  oddsFmt = f;
+  document.querySelectorAll('.odds-toggle .odds-toggle-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const ph = {american:'-110', decimal:'1.91', fractional:'10/11'};
+  const hints = {
+    american: 'Enter American odds (e.g. -110, +150)',
+    decimal: 'Enter decimal odds (e.g. 1.91, 2.50)',
+    fractional: 'Enter fractional odds (e.g. 10/11, 3/2)',
+  };
+  document.getElementById('kelly-odds').placeholder = ph[f];
+  document.getElementById('odds-hint').textContent = hints[f];
+  clearResult();
+}
+
+function updateProbDisplay() {
+  document.getElementById('win-prob').value = document.getElementById('prob-slider').value;
+  clearResult();
+}
+function syncSlider() {
+  document.getElementById('prob-slider').value = document.getElementById('win-prob').value;
+  clearResult();
+}
+function clearResult() {
+  // Only clear if results are shown
+}
+
+async function calculateKelly() {
+  const winProb = parseFloat(document.getElementById('win-prob').value);
+  const oddsVal = document.getElementById('kelly-odds').value.trim();
+
+  if (!oddsVal) { showToast('Enter odds to calculate', 'error'); return; }
+
+  const res = await fetch('/api/kelly', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({
+      win_prob: winProb,
+      odds_format: oddsFmt,
+      odds_value: oddsVal,
+    }),
+  });
+  const data = await res.json();
+  if (!res.ok) { showToast(data.error || 'Calculation error', 'error'); return; }
+
+  // Show results
+  document.getElementById('results-placeholder').style.display = 'none';
+  document.getElementById('kelly-results').style.display = 'block';
+
+  // Edge
+  const edge = winProb - data.implied_prob;
+  const edgeEl = document.getElementById('r-edge');
+  edgeEl.textContent = (edge >= 0 ? '+' : '') + edge.toFixed(1) + '%';
+  edgeEl.className = 'stat-value ' + (edge >= 0 ? 'green' : 'red');
+  document.getElementById('r-implied').textContent = data.implied_prob + '%';
+  document.getElementById('r-decimal').textContent = data.odds_decimal.toFixed(3);
+  document.getElementById('r-fractional').textContent = data.odds_fractional;
+  document.getElementById('r-bankroll').textContent = fmt(data.bankroll);
+
+  // EV banner
+  const evBanner = document.getElementById('ev-banner');
+  const evStr = (data.ev_pct >= 0 ? '+' : '') + data.ev_pct.toFixed(2) + '%';
+  if (data.ev_positive) {
+    evBanner.innerHTML = `<div style="background:var(--green-dim);border:1px solid rgba(0,230,118,0.2);border-radius:var(--rs);padding:12px 16px;display:flex;align-items:center;justify-content:space-between">
+      <div style="display:flex;align-items:center;gap:10px">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        <span style="color:var(--green);font-weight:700;font-size:14px">Positive Expected Value</span>
+      </div>
+      <span style="font-family:var(--font-d);font-size:24px;color:var(--green)">${evStr} EV</span>
+    </div>`;
+  } else {
+    evBanner.innerHTML = `<div style="background:var(--red-dim);border:1px solid rgba(255,23,68,0.2);border-radius:var(--rs);padding:12px 16px;display:flex;align-items:center;justify-content:space-between">
+      <div style="display:flex;align-items:center;gap:10px">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" x2="9" y1="9" y2="15"/><line x1="9" x2="15" y1="9" y2="15"/></svg>
+        <span style="color:var(--red);font-weight:700;font-size:14px">Negative Expected Value</span>
+      </div>
+      <span style="font-family:var(--font-d);font-size:24px;color:var(--red)">${evStr} EV</span>
+    </div>`;
+  }
+
+  // Kelly table
+  document.getElementById('k-full-pct').textContent    = data.kelly_pct.full    + '%';
+  document.getElementById('k-full-amt').textContent    = fmt(data.kelly_amount.full);
+  document.getElementById('k-full-units').textContent  = data.kelly_units.full   + 'u';
+  document.getElementById('k-half-pct').textContent    = data.kelly_pct.half    + '%';
+  document.getElementById('k-half-amt').textContent    = fmt(data.kelly_amount.half);
+  document.getElementById('k-half-units').textContent  = data.kelly_units.half   + 'u';
+  document.getElementById('k-quarter-pct').textContent = data.kelly_pct.quarter  + '%';
+  document.getElementById('k-quarter-amt').textContent = fmt(data.kelly_amount.quarter);
+  document.getElementById('k-quarter-units').textContent = data.kelly_units.quarter + 'u';
+
+  // Recommendation
+  const recDiv = document.getElementById('kelly-recommendation');
+  if (!data.ev_positive) {
+    recDiv.innerHTML = `<div class="danger-banner"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>Kelly recommends 0% stake — this bet has negative expected value. Your estimated win probability (${data.win_prob}%) is below the break-even point (${data.implied_prob}%).</div>`;
+  } else if (data.kelly_pct.full > 25) {
+    recDiv.innerHTML = `<div class="warning-banner"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>Full Kelly is very high (${data.kelly_pct.full}%). Consider using Half Kelly (${fmt(data.kelly_amount.half)}) for significantly reduced variance.</div>`;
+  } else {
+    recDiv.innerHTML = `<div style="background:var(--green-dim);border:1px solid rgba(0,230,118,0.15);border-radius:var(--rs);padding:12px 16px;display:flex;align-items:center;gap:10px;font-size:13px;font-weight:600;color:var(--green)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><polyline points="20 6 9 17 4 12"/></svg>Recommended: Bet <strong>${fmt(data.kelly_amount.half)}</strong> (Half Kelly, ${data.kelly_pct.half}% of bankroll)</div>`;
+  }
+}
+
+// Allow Enter key
+document.getElementById('kelly-odds').addEventListener('keydown', e => {
+  if (e.key === 'Enter') calculateKelly();
+});
+</script>
+{% endblock %}

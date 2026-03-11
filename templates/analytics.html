@@ -1,0 +1,399 @@
+{% extends "base.html" %}
+{% block title %}Analytics — BankrollPro{% endblock %}
+
+{% block content %}
+<div class="page">
+  <div class="page-header">
+    <h1 class="page-title">ANALY<span class="accent">TICS</span></h1>
+    <p class="page-subtitle">Deep dive into your betting performance</p>
+  </div>
+
+  <!-- Hero stats -->
+  <div class="analytics-hero" style="margin-bottom:24px">
+    <div class="stat-card" style="--accent-color:var(--green)">
+      <div class="stat-label">Win Rate</div>
+      <div class="stat-value green" id="a-win-rate">0%</div>
+      <div class="stat-sub" id="a-record">0W - 0L - 0P</div>
+    </div>
+    <div class="stat-card" style="--accent-color:var(--blue)">
+      <div class="stat-label">Total P&amp;L</div>
+      <div class="stat-value" id="a-pl">$0.00</div>
+      <div class="stat-sub" id="a-wagered">$0 wagered</div>
+    </div>
+    <div class="stat-card" style="--accent-color:var(--purple)">
+      <div class="stat-label">ROI</div>
+      <div class="stat-value" id="a-roi">0%</div>
+      <div class="stat-sub">return on investment</div>
+    </div>
+    <div class="stat-card" style="--accent-color:var(--amber)">
+      <div class="stat-label">Avg Odds</div>
+      <div class="stat-value" id="a-avg-odds">—</div>
+      <div class="stat-sub" id="a-avg-stake">$0 avg stake</div>
+    </div>
+    <div class="stat-card" style="--accent-color:var(--red)">
+      <div class="stat-label">Max Drawdown</div>
+      <div class="stat-value red" id="a-drawdown">$0</div>
+      <div class="stat-sub" id="a-streak">0 streak</div>
+    </div>
+  </div>
+
+  <!-- P&L Chart -->
+  <div class="card" style="margin-bottom:20px">
+    <div class="section-header">
+      <div class="section-title">Cumulative P&amp;L Over Time</div>
+      <div style="display:flex;gap:8px">
+        <span style="font-size:11px;color:var(--text-3);display:flex;align-items:center;gap:4px">
+          <span style="width:12px;height:2px;background:var(--green);display:inline-block;border-radius:1px"></span> Profit
+        </span>
+        <span style="font-size:11px;color:var(--text-3);display:flex;align-items:center;gap:4px">
+          <span style="width:12px;height:2px;background:var(--red);display:inline-block;border-radius:1px"></span> Loss
+        </span>
+      </div>
+    </div>
+    <div class="chart-wrap">
+      <canvas id="pl-chart" height="200"></canvas>
+    </div>
+    <div id="pl-empty" class="empty-state" style="display:none;padding:32px">
+      <div class="empty-state-desc">No settled bets to chart yet</div>
+    </div>
+  </div>
+
+  <!-- Streaks -->
+  <div class="grid-3" style="margin-bottom:20px">
+    <div class="streak-card">
+      <div class="stat-label">Current Streak</div>
+      <div class="streak-number" id="current-streak-num" style="color:var(--text-3)">—</div>
+      <div class="streak-label" id="current-streak-label">No bets yet</div>
+    </div>
+    <div class="streak-card">
+      <div class="stat-label">Best Win Streak</div>
+      <div class="streak-number win" id="max-win-streak">0</div>
+      <div class="streak-label">consecutive wins</div>
+    </div>
+    <div class="streak-card">
+      <div class="stat-label">Worst Loss Streak</div>
+      <div class="streak-number loss" id="max-loss-streak">0</div>
+      <div class="streak-label">consecutive losses</div>
+    </div>
+  </div>
+
+  <!-- Period stats -->
+  <div class="grid-3" style="margin-bottom:20px">
+    <div class="card">
+      <div class="card-title">Today</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div class="projection-item"><span class="projection-label">Bets</span><span class="projection-value" id="daily-bets">0</span></div>
+        <div class="projection-item"><span class="projection-label">Record</span><span class="projection-value" id="daily-record">0W - 0L</span></div>
+        <div class="projection-item"><span class="projection-label">P&amp;L</span><span class="projection-value" id="daily-pl">$0.00</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">This Week</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div class="projection-item"><span class="projection-label">Bets</span><span class="projection-value" id="weekly-bets">0</span></div>
+        <div class="projection-item"><span class="projection-label">Record</span><span class="projection-value" id="weekly-record">0W - 0L</span></div>
+        <div class="projection-item"><span class="projection-label">P&amp;L</span><span class="projection-value" id="weekly-pl">$0.00</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">This Month</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div class="projection-item"><span class="projection-label">Bets</span><span class="projection-value" id="monthly-bets">0</span></div>
+        <div class="projection-item"><span class="projection-label">Record</span><span class="projection-value" id="monthly-record">0W - 0L</span></div>
+        <div class="projection-item"><span class="projection-label">P&amp;L</span><span class="projection-value" id="monthly-pl">$0.00</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- By sport + by type -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px">
+    <div class="card">
+      <div class="section-header">
+        <div class="section-title">By Sport</div>
+      </div>
+      <div style="display:flex;gap:20px;align-items:center">
+        <canvas id="sport-chart" style="max-width:140px;max-height:140px"></canvas>
+        <div style="flex:1" id="sport-breakdown">
+          <div class="empty-state" style="padding:16px"><div class="empty-state-desc">No data</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-header">
+        <div class="section-title">By Bet Type</div>
+      </div>
+      <div style="display:flex;gap:20px;align-items:center">
+        <canvas id="type-chart" style="max-width:140px;max-height:140px"></canvas>
+        <div style="flex:1" id="type-breakdown">
+          <div class="empty-state" style="padding:16px"><div class="empty-state-desc">No data</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Big wins/losses + projection -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+    <div class="card">
+      <div class="card-title">Performance Highlights</div>
+      <div style="display:flex;flex-direction:column;gap:0">
+        <div class="projection-item">
+          <span class="projection-label">Biggest Win</span>
+          <span class="projection-value text-green" id="biggest-win">$0.00</span>
+        </div>
+        <div class="projection-item">
+          <span class="projection-label">Biggest Loss</span>
+          <span class="projection-value text-red" id="biggest-loss">$0.00</span>
+        </div>
+        <div class="projection-item">
+          <span class="projection-label">Average Odds</span>
+          <span class="projection-value" id="p-avg-odds">—</span>
+        </div>
+        <div class="projection-item">
+          <span class="projection-label">Average Stake</span>
+          <span class="projection-value" id="p-avg-stake">$0.00</span>
+        </div>
+        <div class="projection-item">
+          <span class="projection-label">Total Bets</span>
+          <span class="projection-value" id="p-total-bets">0</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Bankroll Projection</div>
+      <div style="display:flex;flex-direction:column;gap:0">
+        <div class="projection-item">
+          <span class="projection-label">Current Bankroll</span>
+          <span class="projection-value" id="proj-bankroll">$0.00</span>
+        </div>
+        <div class="projection-item">
+          <span class="projection-label">Unit Size</span>
+          <span class="projection-value" id="proj-unit">$0.00</span>
+        </div>
+        <div class="projection-item">
+          <span class="projection-label">Avg P&amp;L / Bet</span>
+          <span class="projection-value" id="proj-avg-pl">$0.00</span>
+        </div>
+        <div class="projection-item">
+          <span class="projection-label">After 50 Bets</span>
+          <span class="projection-value" id="proj-50">—</span>
+        </div>
+        <div class="projection-item">
+          <span class="projection-label">After 100 Bets</span>
+          <span class="projection-value" id="proj-100">—</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+let plChart = null, sportChart = null, typeChart = null;
+const CHART_COLORS = ['#448aff','#00e676','#ff6d00','#ab47bc','#ef5350','#26c6da','#ffa726','#78909c','#66bb6a','#ec407a'];
+
+async function loadAnalytics() {
+  const res = await fetch('/api/analytics');
+  const d = await res.json();
+
+  // Hero stats
+  document.getElementById('a-win-rate').textContent = d.record.win_rate + '%';
+  document.getElementById('a-record').textContent = `${d.record.wins}W - ${d.record.losses}L - ${d.record.pushes}P`;
+
+  const plEl = document.getElementById('a-pl');
+  plEl.textContent = (d.financials.total_pl >= 0 ? '+' : '') + fmt(d.financials.total_pl);
+  plEl.className = 'stat-value ' + (d.financials.total_pl >= 0 ? 'green' : 'red');
+  document.getElementById('a-wagered').textContent = fmt(d.financials.total_wagered) + ' wagered';
+
+  const roiEl = document.getElementById('a-roi');
+  roiEl.textContent = (d.financials.roi >= 0 ? '+' : '') + d.financials.roi + '%';
+  roiEl.className = 'stat-value ' + (d.financials.roi >= 0 ? 'green' : 'red');
+
+  document.getElementById('a-avg-odds').textContent = d.financials.avg_odds ? (d.financials.avg_odds >= 0 ? '+' : '') + Math.round(d.financials.avg_odds) : '—';
+  document.getElementById('a-avg-stake').textContent = fmt(d.financials.avg_stake) + ' avg stake';
+  document.getElementById('a-drawdown').textContent = fmt(d.streaks.max_drawdown);
+
+  // Streaks
+  const csNum = document.getElementById('current-streak-num');
+  if (d.streaks.current_streak_type) {
+    csNum.textContent = d.streaks.current_streak + d.streaks.current_streak_type;
+    csNum.className = 'streak-number ' + (d.streaks.current_streak_type === 'W' ? 'win' : 'loss');
+    document.getElementById('current-streak-label').textContent = d.streaks.current_streak_type === 'W' ? 'win streak' : 'loss streak';
+  }
+  document.getElementById('a-streak').textContent = d.streaks.current_streak ? `${d.streaks.current_streak}${d.streaks.current_streak_type} current streak` : 'No active streak';
+  document.getElementById('max-win-streak').textContent = d.streaks.max_win_streak;
+  document.getElementById('max-loss-streak').textContent = d.streaks.max_loss_streak;
+
+  // Period stats
+  setPeriod('daily',  d.period_stats.daily);
+  setPeriod('weekly', d.period_stats.weekly);
+  setPeriod('monthly',d.period_stats.monthly);
+
+  // Highlights
+  document.getElementById('biggest-win').textContent = '+' + fmt(d.financials.biggest_win);
+  document.getElementById('biggest-loss').textContent = fmt(d.financials.biggest_loss);
+  document.getElementById('p-avg-odds').textContent = d.financials.avg_odds ? (d.financials.avg_odds>=0?'+':'')+Math.round(d.financials.avg_odds) : '—';
+  document.getElementById('p-avg-stake').textContent = fmt(d.financials.avg_stake);
+  document.getElementById('p-total-bets').textContent = d.record.total;
+
+  // Projection
+  document.getElementById('proj-bankroll').textContent = fmt(d.projection.bankroll);
+  document.getElementById('proj-unit').textContent = fmt(d.projection.unit_size);
+  const avgPl = d.projection.avg_bet_pl;
+  const projAvgEl = document.getElementById('proj-avg-pl');
+  projAvgEl.textContent = (avgPl >= 0 ? '+' : '') + fmt(avgPl);
+  projAvgEl.className = 'projection-value ' + (avgPl >= 0 ? 'text-green' : 'text-red');
+  const proj50  = d.projection.bankroll + avgPl * 50;
+  const proj100 = d.projection.bankroll + avgPl * 100;
+  document.getElementById('proj-50').textContent = fmt(Math.max(0, proj50));
+  document.getElementById('proj-100').textContent = fmt(Math.max(0, proj100));
+
+  // Charts
+  renderPlChart(d.pl_over_time);
+  renderSportChart(d.by_sport);
+  renderTypeChart(d.by_type);
+}
+
+function setPeriod(p, s) {
+  document.getElementById(p+'-bets').textContent   = s.bets;
+  document.getElementById(p+'-record').textContent = `${s.wins}W - ${s.losses}L`;
+  const plEl = document.getElementById(p+'-pl');
+  plEl.textContent = (s.pl >= 0 ? '+' : '') + fmt(s.pl);
+  plEl.className = 'projection-value ' + (s.pl > 0 ? 'text-green' : s.pl < 0 ? 'text-red' : '');
+}
+
+function renderPlChart(data) {
+  const canvas = document.getElementById('pl-chart');
+  const emptyEl = document.getElementById('pl-empty');
+  if (!data.length) { canvas.style.display='none'; emptyEl.style.display='block'; return; }
+  canvas.style.display='block'; emptyEl.style.display='none';
+
+  if (plChart) plChart.destroy();
+  const labels = data.map(d => d.date);
+  const values = data.map(d => d.pl);
+
+  plChart = new Chart(canvas.getContext('2d'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        data: values,
+        borderColor: (ctx) => {
+          const v = values[values.length - 1];
+          return v >= 0 ? '#00e676' : '#ff1744';
+        },
+        borderWidth: 2,
+        fill: true,
+        backgroundColor: (ctx) => {
+          const last = values[values.length - 1];
+          const g = ctx.chart.ctx.createLinearGradient(0, 0, 0, 300);
+          if (last >= 0) { g.addColorStop(0,'rgba(0,230,118,0.15)'); g.addColorStop(1,'rgba(0,0,0,0)'); }
+          else           { g.addColorStop(0,'rgba(255,23,68,0.15)');  g.addColorStop(1,'rgba(0,0,0,0)'); }
+          return g;
+        },
+        tension: 0.4,
+        pointRadius: (ctx) => ctx.datasetIndex === 0 ? 0 : 0,
+        pointHoverRadius: 4,
+        segment: {
+          borderColor: ctx => ctx.p0.parsed.y < 0 || ctx.p1.parsed.y < 0 ? '#ff1744' : '#00e676',
+        }
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      interaction: { intersect: false, mode: 'index' },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#0f1528', borderColor: 'rgba(80,110,180,0.18)',
+          borderWidth: 1, titleColor: '#8899b4', bodyColor: '#dde4f0',
+          callbacks: {
+            title: items => fmtDate(items[0].label) + ' — ' + data[items[0].dataIndex].event,
+            label: item => ' Cumulative: ' + (item.raw >= 0 ? '+' : '') + fmt(item.raw),
+          }
+        }
+      },
+      scales: {
+        x: { display: false },
+        y: {
+          grid: { color: 'rgba(80,110,180,0.08)' },
+          ticks: { color: '#4a5a78', font: {family:'Space Mono',size:10},
+            callback: v => (v>=0?'+':'') + '$' + (Math.abs(v)>=1000?(Math.abs(v)/1000).toFixed(1)+'k':v.toFixed(0)) }
+        }
+      }
+    }
+  });
+}
+
+function renderSportChart(data) {
+  if (!data.length) { document.getElementById('sport-chart').style.display='none'; return; }
+  if (sportChart) sportChart.destroy();
+  const labels = data.map(d => d.sport);
+  const values = data.map(d => d.wins + d.losses);
+  const colors = labels.map(s => sportColor(s));
+
+  sportChart = new Chart(document.getElementById('sport-chart').getContext('2d'), {
+    type: 'doughnut',
+    data: { labels, datasets: [{ data: values, backgroundColor: colors, borderWidth: 2, borderColor: '#101626' }] },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      plugins: { legend: { display: false }, tooltip: {
+        backgroundColor: '#0f1528', borderColor: 'rgba(80,110,180,0.18)', borderWidth: 1,
+        titleColor: '#8899b4', bodyColor: '#dde4f0',
+      }},
+      cutout: '65%',
+    }
+  });
+
+  document.getElementById('sport-breakdown').innerHTML = data.map((s, i) => `
+    <div class="sport-row">
+      <div class="sport-name" style="color:${sportColor(s.sport)}">${s.sport}</div>
+      <div class="sport-bar-wrap">
+        <div class="sport-bar-fill" style="width:${s.win_rate}%;background:${sportColor(s.sport)}"></div>
+      </div>
+      <div class="sport-stats">
+        <span class="sport-pl ${s.pl >= 0 ? 'pos' : 'neg'}">${s.pl >= 0 ? '+' : ''}${fmt(s.pl)}</span>
+        <span style="color:var(--text-3);margin-left:8px">${s.win_rate}%</span>
+      </div>
+    </div>`).join('');
+}
+
+function renderTypeChart(data) {
+  if (!data.length) { document.getElementById('type-chart').style.display='none'; return; }
+  if (typeChart) typeChart.destroy();
+  const labels = data.map(d => d.bet_type);
+  const values = data.map(d => d.wins + d.losses);
+  const colors = CHART_COLORS.slice(0, data.length);
+
+  typeChart = new Chart(document.getElementById('type-chart').getContext('2d'), {
+    type: 'doughnut',
+    data: { labels, datasets: [{ data: values, backgroundColor: colors, borderWidth: 2, borderColor: '#101626' }] },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      plugins: { legend: { display: false }, tooltip: {
+        backgroundColor: '#0f1528', borderColor: 'rgba(80,110,180,0.18)', borderWidth: 1,
+        titleColor: '#8899b4', bodyColor: '#dde4f0',
+      }},
+      cutout: '65%',
+    }
+  });
+
+  document.getElementById('type-breakdown').innerHTML = data.map((t, i) => `
+    <div class="sport-row">
+      <div class="sport-name" style="color:${colors[i]};font-size:11px;width:90px">${t.bet_type}</div>
+      <div class="sport-bar-wrap">
+        <div class="sport-bar-fill" style="width:${t.win_rate}%;background:${colors[i]}"></div>
+      </div>
+      <div class="sport-stats">
+        <span class="sport-pl ${t.pl >= 0 ? 'pos' : 'neg'}">${t.pl >= 0 ? '+' : ''}${fmt(t.pl)}</span>
+        <span style="color:var(--text-3);margin-left:8px">${t.win_rate}%</span>
+      </div>
+    </div>`).join('');
+}
+
+loadAnalytics();
+</script>
+{% endblock %}
