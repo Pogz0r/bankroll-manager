@@ -37,14 +37,27 @@ _data_dir = os.environ.get("DATA_DIR", os.path.join(os.path.dirname(__file__), "
 os.makedirs(_data_dir, exist_ok=True)
 
 _db_url = os.environ.get("DATABASE_URL", f"sqlite:///{os.path.join(_data_dir, 'bankroll.db')}")
-if _db_url.startswith("postgres://"):
+_engine_opts: dict = {"pool_pre_ping": True}
+
+if _db_url.startswith("postgres://") or _db_url.startswith("postgresql://"):
+    # Rewrite scheme for pg8000 dialect.
     _db_url = _db_url.replace("postgres://", "postgresql+pg8000://", 1)
-elif _db_url.startswith("postgresql://"):
     _db_url = _db_url.replace("postgresql://", "postgresql+pg8000://", 1)
+
+    # pg8000 doesn't accept sslmode in the URL — strip it out and pass
+    # ssl_context=True via connect_args instead so the connection is still
+    # encrypted (Render requires SSL on its managed PostgreSQL instances).
+    from urllib.parse import urlparse, urlencode, parse_qs, urlunparse
+    _parsed = urlparse(_db_url)
+    _qs = parse_qs(_parsed.query, keep_blank_values=True)
+    _qs.pop("sslmode", None)
+    _db_url = urlunparse(_parsed._replace(query=urlencode(_qs, doseq=True)))
+
+    import ssl
+    _engine_opts["connect_args"] = {"ssl_context": ssl.create_default_context()}
+
 app.config["SQLALCHEMY_DATABASE_URI"] = _db_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-
-_engine_opts: dict = {"pool_pre_ping": True}
 app.config["SQLALCHEMY_ENGINE_OPTIONS"] = _engine_opts
 db = SQLAlchemy(app)
 
