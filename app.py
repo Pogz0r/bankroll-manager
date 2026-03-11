@@ -11,9 +11,26 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Detect Render production environment
+IS_PRODUCTION = bool(os.environ.get("RENDER"))
+
 app = Flask(__name__)
+# Trust X-Forwarded-Proto / X-Forwarded-Host from Render's proxy
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 app.secret_key = os.environ.get("SECRET_KEY", "dev-only-insecure-key-change-me")
+
+# ── Session / cookie security ─────────────────────────────────────────────────
+# Secure=True ensures the cookie is only sent over HTTPS in production.
+# SameSite=Lax allows the cookie to be sent on top-level cross-site navigations
+# (the GET redirect back from Google), which is required for OAuth state to survive.
+app.config["SESSION_COOKIE_SECURE"] = IS_PRODUCTION
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+
+# Make url_for() produce https:// URLs in production even if the internal
+# request arrives as http (gunicorn behind Render's TLS terminator).
+if IS_PRODUCTION:
+    app.config["PREFERRED_URL_SCHEME"] = "https"
 
 # ── Database ──────────────────────────────────────────────────────────────────
 _data_dir = os.environ.get("DATA_DIR", os.path.join(os.path.dirname(__file__), "data"))
@@ -212,15 +229,27 @@ def login():
     return render_template("login.html")
 
 
+def _callback_url():
+    """Return the absolute OAuth callback URL.
+
+    On Render, RENDER_EXTERNAL_URL is always the canonical https:// public URL,
+    so we use it directly instead of relying on url_for() reconstructing the
+    scheme from proxy headers (which can be unreliable during the OAuth dance).
+    """
+    render_base = os.environ.get("RENDER_EXTERNAL_URL", "").rstrip("/")
+    if render_base:
+        return render_base + "/auth/callback"
+    return url_for("auth_callback", _external=True)
+
+
 @app.route("/auth/google")
 def auth_google():
-    redirect_uri = url_for("auth_callback", _external=True)
-    return google.authorize_redirect(redirect_uri)
+    return google.authorize_redirect(_callback_url())
 
 
 @app.route("/auth/callback")
 def auth_callback():
-    token = google.authorize_access_token()
+    token = google.authorize_access_token(redirect_uri=_callback_url())
     userinfo = token.get("userinfo")
     if not userinfo:
         return redirect(url_for("login"))
