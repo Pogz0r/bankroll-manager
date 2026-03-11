@@ -11,11 +11,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Detect Render production environment
-IS_PRODUCTION = bool(os.environ.get("RENDER"))
+# Detect production environment (set PRODUCTION=true in Koyeb env vars)
+IS_PRODUCTION = bool(os.environ.get("PRODUCTION") or os.environ.get("DATABASE_URL"))
 
 app = Flask(__name__)
-# Trust X-Forwarded-Proto / X-Forwarded-Host from Render's proxy
+# Trust X-Forwarded-Proto / X-Forwarded-Host from Koyeb's proxy
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 app.secret_key = os.environ.get("SECRET_KEY", "dev-only-insecure-key-change-me")
 
@@ -28,7 +28,7 @@ app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 
 # Make url_for() produce https:// URLs in production even if the internal
-# request arrives as http (gunicorn behind Render's TLS terminator).
+# request arrives as http (gunicorn behind Koyeb's TLS terminator).
 if IS_PRODUCTION:
     app.config["PREFERRED_URL_SCHEME"] = "https"
 
@@ -40,22 +40,9 @@ _raw_db_url = os.environ.get("DATABASE_URL", "")
 _engine_opts: dict = {"pool_pre_ping": True}
 
 if _raw_db_url.startswith("postgres://") or _raw_db_url.startswith("postgresql://"):
-    # pg8000 only accepts a small set of connect() kwargs. Neon (and other
-    # managed providers) append parameters like sslmode, channel_binding, etc.
-    # that pg8000 rejects outright. Rather than trying to strip individual
-    # known-bad params, parse out ONLY the five basic fields we need and
-    # build a clean URL with zero query parameters.
-    import ssl
-    from urllib.parse import urlparse
-
-    _p = urlparse(_raw_db_url)
-    _db_url = (
-        f"postgresql+pg8000://{_p.username}:{_p.password}"
-        f"@{_p.hostname}:{_p.port or 5432}{_p.path}"
-        # No query string — all provider-specific params are intentionally dropped
-    )
-    # SSL is required by Neon/Render; pass it via connect_args instead of the URL.
-    _engine_opts["connect_args"] = {"ssl_context": ssl.create_default_context()}
+    # psycopg2 handles sslmode=require natively in the URL — no stripping needed.
+    # Normalize legacy "postgres://" scheme to "postgresql://" for SQLAlchemy.
+    _db_url = _raw_db_url.replace("postgres://", "postgresql://", 1)
 else:
     # Local SQLite fallback
     _db_url = _raw_db_url or f"sqlite:///{os.path.join(_data_dir, 'bankroll.db')}"
@@ -255,7 +242,7 @@ def login():
 
 @app.route("/auth/google")
 def auth_google():
-    # _scheme='https' forces the correct URI on Render regardless of whether
+    # _scheme='https' forces the correct URI on Koyeb regardless of whether
     # ProxyFix has had a chance to set the scheme on this request.
     # authorize_access_token() must be called with NO redirect_uri argument —
     # Authlib reads it back from the session state automatically.
@@ -295,7 +282,7 @@ def auth_callback():
             return (
                 "<h2>Login error</h2>"
                 f"<p>Something went wrong during Google login. "
-                f"Check the Render logs for details.</p>"
+                f"Check the Koyeb logs for details.</p>"
                 f"<p><code>{exc}</code></p>"
                 f"<p><a href='/login'>Try again</a></p>"
             ), 500
@@ -311,7 +298,7 @@ def logout():
 
 @app.route("/health")
 def health():
-    return "ok", 200
+    return jsonify({"status": "ok"}), 200
 
 
 # ── Page routes ───────────────────────────────────────────────────────────────
@@ -947,5 +934,5 @@ def api_kelly():
 
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
+    port = int(os.environ.get("PORT", 8000))
     app.run(host="0.0.0.0", port=port, debug=False)
