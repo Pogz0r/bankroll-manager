@@ -21,13 +21,13 @@ os.makedirs(_data_dir, exist_ok=True)
 
 _db_url = os.environ.get("DATABASE_URL", f"sqlite:///{os.path.join(_data_dir, 'bankroll.db')}")
 if _db_url.startswith("postgres://"):
-    _db_url = _db_url.replace("postgres://", "postgresql://", 1)
+    _db_url = _db_url.replace("postgres://", "postgresql+pg8000://", 1)
+elif _db_url.startswith("postgresql://"):
+    _db_url = _db_url.replace("postgresql://", "postgresql+pg8000://", 1)
 app.config["SQLALCHEMY_DATABASE_URI"] = _db_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 _engine_opts: dict = {"pool_pre_ping": True}
-if _db_url.startswith("postgresql"):
-    _engine_opts["connect_args"] = {"connect_timeout": 10}
 app.config["SQLALCHEMY_ENGINE_OPTIONS"] = _engine_opts
 db = SQLAlchemy(app)
 
