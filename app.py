@@ -238,15 +238,13 @@ def login():
 
 @app.route("/auth/google")
 def auth_google():
-    # Do NOT pass redirect_uri to authorize_redirect. Authlib 1.3.x stores
-    # whatever is passed here into the OAuth session state, then
-    # authorize_access_token() does params.update(state_data) and calls
-    # fetch_access_token(redirect_uri=x, **params) — where params already
-    # contains redirect_uri — causing "multiple values for keyword argument".
-    # Omitting it here keeps redirect_uri out of state_data entirely.
-    # PREFERRED_URL_SCHEME="https" + ProxyFix ensure the callback URL is
-    # correct; Google uses the registered redirect URI as the default.
-    return google.authorize_redirect()
+    # _scheme='https' forces the correct URI on Render regardless of whether
+    # ProxyFix has had a chance to set the scheme on this request.
+    # authorize_access_token() must be called with NO redirect_uri argument —
+    # Authlib reads it back from the session state automatically.
+    scheme = "https" if IS_PRODUCTION else "http"
+    redirect_uri = url_for("auth_callback", _external=True, _scheme=scheme)
+    return google.authorize_redirect(redirect_uri)
 
 
 @app.route("/auth/callback")
