@@ -236,30 +236,24 @@ def login():
     return render_template("login.html")
 
 
-def _callback_url():
-    """Return the absolute OAuth callback URL.
-
-    On Render, RENDER_EXTERNAL_URL is always the canonical https:// public URL,
-    so we use it directly instead of relying on url_for() reconstructing the
-    scheme from proxy headers (which can be unreliable during the OAuth dance).
-    """
-    render_base = os.environ.get("RENDER_EXTERNAL_URL", "").rstrip("/")
-    if render_base:
-        return render_base + "/auth/callback"
-    return url_for("auth_callback", _external=True)
-
-
 @app.route("/auth/google")
 def auth_google():
-    return google.authorize_redirect(_callback_url())
+    # Do NOT pass redirect_uri to authorize_redirect. Authlib 1.3.x stores
+    # whatever is passed here into the OAuth session state, then
+    # authorize_access_token() does params.update(state_data) and calls
+    # fetch_access_token(redirect_uri=x, **params) — where params already
+    # contains redirect_uri — causing "multiple values for keyword argument".
+    # Omitting it here keeps redirect_uri out of state_data entirely.
+    # PREFERRED_URL_SCHEME="https" + ProxyFix ensure the callback URL is
+    # correct; Google uses the registered redirect URI as the default.
+    return google.authorize_redirect()
 
 
 @app.route("/auth/callback")
 def auth_callback():
     import traceback
     try:
-        cb_url = _callback_url()
-        print(f"[auth_callback] redirect_uri={cb_url}", flush=True)
+        print("[auth_callback] fetching access token", flush=True)
         token = google.authorize_access_token()
         userinfo = token.get("userinfo")
         if not userinfo:
