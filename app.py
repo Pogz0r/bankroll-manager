@@ -36,25 +36,29 @@ if IS_PRODUCTION:
 _data_dir = os.environ.get("DATA_DIR", os.path.join(os.path.dirname(__file__), "data"))
 os.makedirs(_data_dir, exist_ok=True)
 
-_db_url = os.environ.get("DATABASE_URL", f"sqlite:///{os.path.join(_data_dir, 'bankroll.db')}")
+_raw_db_url = os.environ.get("DATABASE_URL", "")
 _engine_opts: dict = {"pool_pre_ping": True}
 
-if _db_url.startswith("postgres://") or _db_url.startswith("postgresql://"):
-    # Rewrite scheme for pg8000 dialect.
-    _db_url = _db_url.replace("postgres://", "postgresql+pg8000://", 1)
-    _db_url = _db_url.replace("postgresql://", "postgresql+pg8000://", 1)
-
-    # pg8000 doesn't accept sslmode in the URL — strip it out and pass
-    # ssl_context=True via connect_args instead so the connection is still
-    # encrypted (Render requires SSL on its managed PostgreSQL instances).
-    from urllib.parse import urlparse, urlencode, parse_qs, urlunparse
-    _parsed = urlparse(_db_url)
-    _qs = parse_qs(_parsed.query, keep_blank_values=True)
-    _qs.pop("sslmode", None)
-    _db_url = urlunparse(_parsed._replace(query=urlencode(_qs, doseq=True)))
-
+if _raw_db_url.startswith("postgres://") or _raw_db_url.startswith("postgresql://"):
+    # pg8000 only accepts a small set of connect() kwargs. Neon (and other
+    # managed providers) append parameters like sslmode, channel_binding, etc.
+    # that pg8000 rejects outright. Rather than trying to strip individual
+    # known-bad params, parse out ONLY the five basic fields we need and
+    # build a clean URL with zero query parameters.
     import ssl
+    from urllib.parse import urlparse
+
+    _p = urlparse(_raw_db_url)
+    _db_url = (
+        f"postgresql+pg8000://{_p.username}:{_p.password}"
+        f"@{_p.hostname}:{_p.port or 5432}{_p.path}"
+        # No query string — all provider-specific params are intentionally dropped
+    )
+    # SSL is required by Neon/Render; pass it via connect_args instead of the URL.
     _engine_opts["connect_args"] = {"ssl_context": ssl.create_default_context()}
+else:
+    # Local SQLite fallback
+    _db_url = _raw_db_url or f"sqlite:///{os.path.join(_data_dir, 'bankroll.db')}"
 
 app.config["SQLALCHEMY_DATABASE_URI"] = _db_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
