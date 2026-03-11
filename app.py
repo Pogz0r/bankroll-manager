@@ -260,7 +260,7 @@ def auth_callback():
     try:
         cb_url = _callback_url()
         print(f"[auth_callback] redirect_uri={cb_url}", flush=True)
-        token = google.authorize_access_token(redirect_uri=cb_url)
+        token = google.authorize_access_token()
         userinfo = token.get("userinfo")
         if not userinfo:
             print("[auth_callback] no userinfo in token", flush=True)
