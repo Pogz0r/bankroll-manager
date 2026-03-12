@@ -84,6 +84,7 @@ class BankrollSettings(db.Model):
     daily_limit = db.Column(db.Float, default=0.0)
     weekly_limit = db.Column(db.Float, default=0.0)
     monthly_limit = db.Column(db.Float, default=0.0)
+    odds_format = db.Column(db.String(20), default="american")
 
 
 class BankrollTransaction(db.Model):
@@ -108,6 +109,7 @@ class Bet(db.Model):
     profit_loss = db.Column(db.Float, default=0.0)
     date_placed = db.Column(db.Date, nullable=False)
     notes = db.Column(db.String(500))
+    closing_line_odds = db.Column(db.Integer, nullable=True)
 
 
 class BankrollHistory(db.Model):
@@ -155,6 +157,17 @@ def fractional_to_american(frac_str):
         return 0
 
 
+def calc_clv(bet_odds_american, closing_odds_american):
+    """CLV% = (bet_decimal - closing_decimal) / closing_decimal * 100. Positive = beat the closing line."""
+    if closing_odds_american is None:
+        return None
+    closing_decimal = american_to_decimal(closing_odds_american)
+    if closing_decimal <= 1:
+        return None
+    bet_decimal = american_to_decimal(bet_odds_american)
+    return round((bet_decimal - closing_decimal) / closing_decimal * 100, 2)
+
+
 def calc_profit(odds_american, stake, result):
     if result == "Win":
         return round(stake * (american_to_decimal(odds_american) - 1), 2)
@@ -167,7 +180,8 @@ def get_settings(user_id):
     s = BankrollSettings.query.filter_by(user_id=user_id).first()
     if not s:
         s = BankrollSettings(user_id=user_id, starting_bankroll=0.0, unit_size_pct=2.0,
-                              daily_limit=0.0, weekly_limit=0.0, monthly_limit=0.0)
+                              daily_limit=0.0, weekly_limit=0.0, monthly_limit=0.0,
+                              odds_format="american")
         db.session.add(s)
         db.session.commit()
     return s
@@ -453,6 +467,8 @@ def api_bets():
             "result": b.result, "profit_loss": b.profit_loss,
             "date_placed": b.date_placed.isoformat(),
             "notes": b.notes or "",
+            "closing_line_odds": b.closing_line_odds,
+            "clv": calc_clv(b.odds_american, b.closing_line_odds),
         } for b in bets],
         "unit_size": round(bankroll * settings.unit_size_pct / 100, 2),
         "unit_size_pct": settings.unit_size_pct,
@@ -562,6 +578,16 @@ def api_update_bet(bet_id):
         except ValueError:
             pass
 
+    if "closing_line_odds" in body:
+        val = body["closing_line_odds"]
+        if val in (None, "", "null"):
+            bet.closing_line_odds = None
+        else:
+            try:
+                bet.closing_line_odds = int(float(str(val)))
+            except (TypeError, ValueError):
+                pass
+
     bet.profit_loss = calc_profit(bet.odds_american, bet.stake, bet.result)
     db.session.commit()
     snapshot_bankroll(uid)
@@ -650,6 +676,7 @@ def api_get_settings():
         "daily_limit": s.daily_limit,
         "weekly_limit": s.weekly_limit,
         "monthly_limit": s.monthly_limit,
+        "odds_format": s.odds_format or "american",
     })
 
 
@@ -681,6 +708,10 @@ def api_update_settings():
                 setattr(s, field, float(body[field]))
             except (TypeError, ValueError):
                 pass
+
+    if "odds_format" in body:
+        if body["odds_format"] in ("american", "decimal", "fractional"):
+            s.odds_format = body["odds_format"]
 
     db.session.commit()
     snapshot_bankroll(uid)
@@ -818,6 +849,20 @@ def api_analytics():
         if dd > max_drawdown:
             max_drawdown = dd
 
+    # CLV stats
+    bets_with_clv = sorted(
+        [b for b in settled if b.closing_line_odds is not None],
+        key=lambda b: (b.date_placed, b.id)
+    )
+    clv_values = [c for b in bets_with_clv for c in [calc_clv(b.odds_american, b.closing_line_odds)] if c is not None]
+    avg_clv = round(sum(clv_values) / len(clv_values), 2) if clv_values else None
+    clv_beat_pct = round(sum(1 for c in clv_values if c > 0) / len(clv_values) * 100, 1) if clv_values else None
+    clv_over_time = []
+    for b in bets_with_clv:
+        c = calc_clv(b.odds_american, b.closing_line_odds)
+        if c is not None:
+            clv_over_time.append({"date": b.date_placed.isoformat(), "clv": c, "event": b.event})
+
     settings = get_settings(uid)
     bankroll = get_current_bankroll(uid)
     avg_bet_pl = total_pl / len(settled) if settled else 0
@@ -857,6 +902,12 @@ def api_analytics():
             "unit_size": round(bankroll * settings.unit_size_pct / 100, 2),
             "avg_bet_pl": round(avg_bet_pl, 2),
             "roi_pct": round(roi, 1),
+        },
+        "clv": {
+            "avg_clv": avg_clv,
+            "beat_closing_pct": clv_beat_pct,
+            "total_with_clv": len(clv_values),
+            "over_time": clv_over_time,
         },
     })
 

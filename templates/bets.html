@@ -87,11 +87,20 @@
             <th>Stake</th>
             <th>Result</th>
             <th>P&amp;L</th>
+            <th style="white-space:nowrap">
+              <span style="display:flex;align-items:center;gap:4px">
+                CLV
+                <div class="clv-tooltip-wrap">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--text-3);cursor:help"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                  <div class="clv-tooltip">Closing Line Value measures whether you consistently get better odds than the market closing price — positive CLV indicates long-term edge.</div>
+                </div>
+              </span>
+            </th>
             <th></th>
           </tr>
         </thead>
         <tbody id="bets-tbody">
-          <tr><td colspan="10" style="text-align:center;padding:40px;color:var(--text-3)">Loading...</td></tr>
+          <tr><td colspan="11" style="text-align:center;padding:40px;color:var(--text-3)">Loading...</td></tr>
         </tbody>
       </table>
     </div>
@@ -174,9 +183,20 @@
           </select>
         </div>
       </div>
-      <div class="form-group" style="margin-bottom:18px">
+      <div class="form-group" style="margin-bottom:14px">
         <label class="form-label">Notes (optional)</label>
         <textarea class="form-textarea" name="notes" placeholder="Any notes about this bet..."></textarea>
+      </div>
+      <div class="form-group" id="closing-line-group" style="margin-bottom:18px">
+        <label class="form-label" style="display:flex;align-items:center;gap:5px">
+          Closing Line Odds (optional)
+          <div class="clv-tooltip-wrap">
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--text-3);cursor:help"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+            <div class="clv-tooltip">Closing Line Value measures whether you consistently get better odds than the market closing price — positive CLV indicates long-term edge.</div>
+          </div>
+        </label>
+        <input class="form-input" name="closing_line_odds" id="modal-closing-line" placeholder="e.g. -120 (American odds at market close)" style="font-family:var(--font-m)">
+        <div id="clv-preview" style="font-size:11px;margin-top:4px"></div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" onclick="closeBetModal()">Cancel</button>
@@ -196,7 +216,17 @@
       </button>
     </div>
     <input type="hidden" id="settle-bet-id">
-    <p style="color:var(--text-2);margin-bottom:18px;font-size:13px" id="settle-event"></p>
+    <p style="color:var(--text-2);margin-bottom:16px;font-size:13px" id="settle-event"></p>
+    <div class="form-group" style="margin-bottom:16px">
+      <label class="form-label" style="display:flex;align-items:center;gap:5px">
+        Closing Line Odds (optional)
+        <div class="clv-tooltip-wrap">
+          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--text-3)"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+          <div class="clv-tooltip">Closing Line Value measures whether you consistently get better odds than the market closing price — positive CLV indicates long-term edge.</div>
+        </div>
+      </label>
+      <input class="form-input" id="settle-closing-line" placeholder="e.g. -120 (for CLV tracking)" style="font-family:var(--font-m)">
+    </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
       <button class="btn" style="background:var(--green-dim);color:var(--green);border:1px solid rgba(0,230,118,0.3);font-size:16px;padding:16px;flex-direction:column;gap:4px;height:auto" onclick="settleBet('Win')">
         ✓ WIN
@@ -219,11 +249,16 @@ let allBets = [];
 
 document.getElementById('modal-date').valueAsDate = new Date();
 
-function setOddsDisplay(fmt, btn) {
+async function setOddsDisplay(fmt, btn) {
   oddsDisplay = fmt;
   document.querySelectorAll('#odds-display-toggle .odds-toggle-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   renderBetsTable(allBets);
+  // Persist preference
+  await fetch('/api/settings', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({odds_format: fmt}),
+  });
 }
 
 function clearFilters() {
@@ -235,7 +270,22 @@ function clearFilters() {
   loadBets();
 }
 
+let _settingsLoaded = false;
 async function loadBets() {
+  // Load user odds format preference on first call
+  if (!_settingsLoaded) {
+    _settingsLoaded = true;
+    try {
+      const sr = await fetch('/api/settings');
+      const s = await sr.json();
+      oddsDisplay = s.odds_format || 'american';
+      const fmtIdx = {american:0, decimal:1, fractional:2};
+      const btns = document.querySelectorAll('#odds-display-toggle .odds-toggle-btn');
+      btns.forEach(b => b.classList.remove('active'));
+      if (btns[fmtIdx[oddsDisplay]]) btns[fmtIdx[oddsDisplay]].classList.add('active');
+    } catch(e) {}
+  }
+
   const params = new URLSearchParams({
     sport:     document.getElementById('f-sport').value,
     bet_type:  document.getElementById('f-type').value,
@@ -265,10 +315,17 @@ async function loadBets() {
   renderBetsTable(data.bets);
 }
 
+function fmtClv(clv) {
+  if (clv === null || clv === undefined) return '<span class="clv-zero">—</span>';
+  const sign = clv > 0 ? '+' : '';
+  const cls = clv > 0 ? 'clv-pos' : clv < 0 ? 'clv-neg' : 'clv-zero';
+  return `<span class="${cls}">${sign}${clv.toFixed(1)}%</span>`;
+}
+
 function renderBetsTable(bets) {
   const tbody = document.getElementById('bets-tbody');
   if (!bets.length) {
-    tbody.innerHTML = '<tr><td colspan="10"><div class="empty-state"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:36px;height:36px;margin:0 auto 10px;opacity:0.3;display:block"><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/></svg><div class="empty-state-title">No bets found</div><div class="empty-state-desc">Try adjusting your filters or add a new bet</div></div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="11"><div class="empty-state"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:36px;height:36px;margin:0 auto 10px;opacity:0.3;display:block"><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/></svg><div class="empty-state-title">No bets found</div><div class="empty-state-desc">Try adjusting your filters or add a new bet</div></div></td></tr>';
     return;
   }
 
@@ -279,6 +336,7 @@ function renderBetsTable(bets) {
                     b.odds_fractional;
     const pl = b.result === 'Pending' ? '—' : (b.profit_loss >= 0 ? '+' : '') + fmt(b.profit_loss);
     const plCls = b.result === 'Pending' ? '' : b.profit_loss > 0 ? 'pl-positive' : b.profit_loss < 0 ? 'pl-negative' : '';
+    const clvHtml = b.result === 'Pending' ? '<span class="clv-zero">—</span>' : fmtClv(b.clv);
     return `<tr class="${rowCls}">
       <td style="color:var(--text-3);font-size:12px;white-space:nowrap">${fmtDate(b.date_placed)}</td>
       <td><span class="sport-badge" style="color:${sportColor(b.sport)}">${b.sport}</span></td>
@@ -289,6 +347,7 @@ function renderBetsTable(bets) {
       <td class="mono">${fmt(b.stake)}</td>
       <td><span class="result-badge ${b.result}">${b.result}</span></td>
       <td class="${plCls}">${pl}</td>
+      <td>${clvHtml}</td>
       <td style="white-space:nowrap">
         ${b.result === 'Pending' ? `<button class="btn btn-sm" style="background:var(--amber-dim);color:var(--amber);border:none;margin-right:4px" onclick="openSettleModal(${b.id},'${b.event.replace(/'/g,"\\'")}')">Settle</button>` : ''}
         <button class="btn btn-ghost btn-sm btn-icon" onclick="openEditModal(${b.id})" title="Edit">
@@ -308,6 +367,10 @@ function openAddModal() {
   document.getElementById('bet-submit-btn').textContent = 'Add Bet';
   document.getElementById('bet-form').reset();
   document.getElementById('modal-date').valueAsDate = new Date();
+  document.getElementById('modal-odds-format').value = oddsDisplay;
+  document.getElementById('modal-closing-line').value = '';
+  document.getElementById('clv-preview').textContent = '';
+  updateModalOddsPlaceholder();
   document.getElementById('bet-modal').classList.add('open');
 }
 
@@ -328,6 +391,8 @@ function openEditModal(id) {
   form.elements['result'].value = bet.result;
   form.elements['notes'].value = bet.notes || '';
   document.getElementById('modal-date').value = bet.date_placed;
+  document.getElementById('modal-closing-line').value = bet.closing_line_odds || '';
+  updateClvPreview(bet.odds_american, bet.closing_line_odds);
   document.getElementById('bet-modal').classList.add('open');
 }
 
@@ -348,11 +413,46 @@ function updateModalOddsPlaceholder() {
   document.getElementById('modal-odds-input').placeholder = ph[fmt_sel] || '-110';
 }
 
+function amDecimal(odds) {
+  const o = parseInt(odds);
+  if (isNaN(o)) return null;
+  return o >= 0 ? (o / 100) + 1 : (-100 / o) + 1;
+}
+
+function updateClvPreview(betOddsAmerican, closingOdds) {
+  const preview = document.getElementById('clv-preview');
+  const closing = parseInt(closingOdds);
+  if (!closingOdds || isNaN(closing)) { preview.textContent = ''; return; }
+  const betDec = amDecimal(betOddsAmerican);
+  const closingDec = amDecimal(closing);
+  if (!betDec || !closingDec || closingDec <= 1) { preview.textContent = ''; return; }
+  const clv = ((betDec - closingDec) / closingDec * 100).toFixed(1);
+  const sign = clv > 0 ? '+' : '';
+  const color = clv > 0 ? 'var(--green)' : clv < 0 ? 'var(--red)' : 'var(--text-3)';
+  preview.innerHTML = `CLV: <strong style="color:${color}">${sign}${clv}%</strong> ${clv > 0 ? '✓ Beat closing line' : clv < 0 ? '✗ Closing line was better' : 'Tied closing line'}`;
+}
+
+// Live CLV preview when closing line changes in modal
+document.getElementById('modal-closing-line').addEventListener('input', function() {
+  const betOddsInput = document.getElementById('modal-odds-input').value;
+  const fmt = document.getElementById('modal-odds-format').value;
+  let betAm = null;
+  if (fmt === 'american') betAm = parseInt(betOddsInput);
+  else if (fmt === 'decimal') { const d = parseFloat(betOddsInput); betAm = d >= 2 ? Math.round((d-1)*100) : Math.round(-100/(d-1)); }
+  updateClvPreview(betAm, this.value);
+});
+
 document.getElementById('bet-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const betId = document.getElementById('bet-id').value;
   const fd = new FormData(e.target);
   const body = Object.fromEntries(fd.entries());
+  // Convert empty closing_line_odds to null
+  if (body.closing_line_odds === '' || body.closing_line_odds === undefined) {
+    body.closing_line_odds = null;
+  } else {
+    body.closing_line_odds = parseInt(body.closing_line_odds) || null;
+  }
 
   const isEdit = !!betId;
   const url = isEdit ? '/api/bets/' + betId : '/api/bets';
@@ -374,15 +474,19 @@ document.getElementById('bet-form').addEventListener('submit', async (e) => {
 function openSettleModal(id, event) {
   document.getElementById('settle-bet-id').value = id;
   document.getElementById('settle-event').textContent = event;
+  document.getElementById('settle-closing-line').value = '';
   document.getElementById('settle-modal').classList.add('open');
 }
 
 async function settleBet(result) {
   const id = document.getElementById('settle-bet-id').value;
+  const closingVal = document.getElementById('settle-closing-line').value.trim();
+  const body = {result};
+  if (closingVal) body.closing_line_odds = parseInt(closingVal) || null;
   const res = await fetch('/api/bets/' + id, {
     method: 'PUT',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({result}),
+    body: JSON.stringify(body),
   });
   if (res.ok) {
     document.getElementById('settle-modal').classList.remove('open');

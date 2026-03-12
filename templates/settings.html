@@ -40,6 +40,18 @@
           </div>
         </div>
 
+        <div class="form-group" style="margin-bottom:20px">
+          <label class="form-label" style="display:flex;align-items:center;gap:6px">
+            Odds Display Format
+          </label>
+          <div class="odds-toggle" id="settings-odds-toggle" style="max-width:100%">
+            <button type="button" class="odds-toggle-btn" id="odds-btn-american" onclick="setOddsFormat('american',this)">American (+150)</button>
+            <button type="button" class="odds-toggle-btn" id="odds-btn-decimal" onclick="setOddsFormat('decimal',this)">Decimal (2.50)</button>
+            <button type="button" class="odds-toggle-btn" id="odds-btn-fractional" onclick="setOddsFormat('fractional',this)">Fractional (3/2)</button>
+          </div>
+          <div style="font-size:11px;color:var(--text-3);margin-top:5px">Default format used across Bets and Kelly pages</div>
+        </div>
+
         <button type="submit" class="btn btn-primary" style="width:100%">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
           Save Settings
@@ -162,6 +174,7 @@
 <script>
 let currentBankroll = 0;
 let currentUnitPct = 2;
+let currentOddsFormat = 'american';
 
 document.getElementById('txn-date').valueAsDate = new Date();
 
@@ -177,6 +190,12 @@ async function loadSettings() {
 
   currentBankroll = dash.bankroll;
   currentUnitPct = settings.unit_size_pct;
+  currentOddsFormat = settings.odds_format || 'american';
+
+  // Odds format toggle
+  document.querySelectorAll('#settings-odds-toggle .odds-toggle-btn').forEach(b => b.classList.remove('active'));
+  const oddsBtn = document.getElementById('odds-btn-' + currentOddsFormat);
+  if (oddsBtn) oddsBtn.classList.add('active');
 
   // Balance display
   document.getElementById('current-balance').textContent = fmt(dash.bankroll);
@@ -252,10 +271,23 @@ function renderTxnHistory(txns) {
     </div>`).join('') + '</div>';
 }
 
+async function setOddsFormat(fmt, btn) {
+  currentOddsFormat = fmt;
+  document.querySelectorAll('#settings-odds-toggle .odds-toggle-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  await fetch('/api/settings', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({odds_format: fmt}),
+  });
+  showToast('Odds format saved!', 'success');
+}
+
 document.getElementById('settings-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const fd = new FormData(e.target);
   const body = Object.fromEntries(fd.entries());
+  body.odds_format = currentOddsFormat;
   const res = await fetch('/api/settings', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
