@@ -74,23 +74,35 @@ body {
 }
 
 .sidebar-logo {
-  padding: 24px 20px 20px;
+  padding: 20px 20px 18px;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   border-bottom: 1px solid var(--border);
+  text-decoration: none;
+  color: inherit;
+  transition: opacity 0.15s ease;
+}
+.sidebar-logo:hover { opacity: 0.88; }
+.sidebar-logo:hover .logo-mark {
+  box-shadow: 0 4px 22px rgba(0,230,118,0.65), inset 0 1px 0 rgba(255,255,255,0.3);
+  transform: translateY(-1px);
 }
 
 .logo-mark {
-  width: 34px; height: 34px;
-  background: linear-gradient(135deg, var(--green), #00b248);
-  border-radius: 8px;
+  width: 54px; height: 38px;
+  background: linear-gradient(145deg, #2bffa0 0%, #00e676 38%, #00cc66 68%, #009940 100%);
+  border-radius: 10px;
   display: flex; align-items: center; justify-content: center;
-  font-size: 13px; font-weight: 700; color: #000;
-  font-family: var(--font-d);
-  letter-spacing: -0.5px;
+  font-family: var(--font-u);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 2.5px;
+  color: #fff;
   flex-shrink: 0;
-  box-shadow: 0 0 16px var(--green-glow);
+  box-shadow: 0 2px 16px rgba(0,230,118,0.45), inset 0 1px 0 rgba(255,255,255,0.28);
+  text-shadow: 0 1px 4px rgba(0,100,50,0.35);
+  transition: box-shadow 0.18s ease, transform 0.18s ease;
 }
 
 .logo-text {
@@ -988,17 +1000,30 @@ tbody tr.row-pending td:first-child { border-left: 3px solid var(--amber); }
   text-align: center;
   margin-bottom: 32px;
 }
+.login-logo-link {
+  display: block;
+  width: fit-content;
+  margin: 0 auto 16px;
+  text-decoration: none;
+}
+.login-logo-link:hover .login-logo-mark {
+  box-shadow: 0 8px 40px rgba(0,230,118,0.7), inset 0 1px 0 rgba(255,255,255,0.35);
+  transform: translateY(-2px);
+}
+
 .login-logo-mark {
-  width: 56px; height: 56px;
-  background: linear-gradient(135deg, var(--green), #00b248);
-  border-radius: 14px;
+  width: 96px; height: 68px;
+  background: linear-gradient(145deg, #2bffa0 0%, #00e676 38%, #00cc66 68%, #009940 100%);
+  border-radius: 18px;
   display: flex; align-items: center; justify-content: center;
-  font-family: var(--font-d);
-  font-size: 20px;
-  letter-spacing: -0.5px;
-  color: #000;
-  margin: 0 auto 14px;
-  box-shadow: 0 0 30px var(--green-glow);
+  font-family: var(--font-u);
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: 4px;
+  color: #fff;
+  box-shadow: 0 6px 32px rgba(0,230,118,0.55), inset 0 1px 0 rgba(255,255,255,0.3);
+  text-shadow: 0 1px 6px rgba(0,100,50,0.35);
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
 }
 .login-app-name {
   font-family: var(--font-d);
